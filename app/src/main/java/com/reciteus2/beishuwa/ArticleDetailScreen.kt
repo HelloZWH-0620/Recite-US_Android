@@ -3,10 +3,6 @@ package com.reciteus2.beishuwa
 import android.Manifest
 import android.content.Context
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -42,7 +38,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,7 +58,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
-import java.util.Locale
 
 private fun audioAssetExists(context: Context, articleId: String): Boolean =
     try {
@@ -84,7 +78,6 @@ fun ArticleDetailScreen(
 
     var notesOn by rememberSaveable { mutableStateOf(false) }
     var translationOn by rememberSaveable { mutableStateOf(false) }
-    var speaking by rememberSaveable { mutableStateOf(false) }
 
     val dark = isSystemInDarkTheme()
     val highlightColor = if (dark) Color(0xFFD9A521) else Color(0xFF6E9FD8)
@@ -96,45 +89,9 @@ fun ArticleDetailScreen(
     }
     val sectionNotes = remember(article, sections) { assignNotes(sections, article.notes) }
 
-    val ttsHolder = remember { arrayOfNulls<TextToSpeech>(1) }
-    var ttsReady by remember { mutableStateOf(false) }
-    val mainHandler = remember { Handler(Looper.getMainLooper()) }
-
-    DisposableEffect(Unit) {
-        val engine = TextToSpeech(context.applicationContext) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                ttsHolder[0]?.let { tts ->
-                    tts.language = Locale.CHINA
-                    tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                        override fun onStart(utteranceId: String?) = Unit
-
-                        override fun onDone(utteranceId: String?) {
-                            mainHandler.post { speaking = false }
-                        }
-
-                        @Deprecated("Deprecated in Java")
-                        override fun onError(utteranceId: String?) {
-                            mainHandler.post { speaking = false }
-                        }
-                    })
-                    ttsReady = true
-                }
-            }
-        }
-        ttsHolder[0] = engine
-        onDispose {
-            engine.stop()
-            engine.shutdown()
-        }
-    }
-
-    LaunchedEffect(speaking, ttsReady) {
-        if (speaking && ttsReady) {
-            ttsHolder[0]?.speak(article.text, TextToSpeech.QUEUE_FLUSH, null, "beishuwa_${article.id}")
-        } else if (!speaking) {
-            ttsHolder[0]?.stop()
-        }
-    }
+    // 说明：原有一套从未被触发的 TTS 代码（每打开一篇文章都会初始化一个
+    // TextToSpeech 引擎但没有任何入口把 speaking 置为 true）已移除；
+    // 正文朗读后续可通过「朗读」按钮在无音频篇目上作为兜底重新接入。
 
     // 实验性朗读：播放内置音频 + 系统媒体中心控制
     val experimental = SettingsRepository.experimental.value
@@ -339,8 +296,14 @@ fun ArticleDetailScreen(
                                         ) {
                                             notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                         }
-                                        audioPlayer.start("audio/${article.id}.mp3", article.title, article.author)
-                                        audioPlaying = true
+                                        // 音频缺失/损坏时 start() 可能抛异常，避免点击直接崩溃
+                                        runCatching {
+                                            audioPlayer.start("audio/${article.id}.mp3", article.title, article.author)
+                                            audioPlaying = true
+                                        }.onFailure {
+                                            audioPlaying = false
+                                            Toast.makeText(context, "朗读播放失败", Toast.LENGTH_SHORT).show()
+                                        }
                                     }
                                 }
                             },

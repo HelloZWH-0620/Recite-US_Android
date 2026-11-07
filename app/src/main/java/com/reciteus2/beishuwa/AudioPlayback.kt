@@ -39,10 +39,19 @@ class AudioPlayback(
         release()
 
         val mp = MediaPlayer()
-        context.assets.openFd(assetName).use { afd ->
-            mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+        try {
+            context.assets.openFd(assetName).use { afd ->
+                mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+            }
+            mp.prepare()
+        } catch (e: Exception) {
+            // 资源缺失或解码失败：释放半初始化的对象后抛给调用方提示
+            try { mp.release() } catch (ignored: Exception) {}
+            player = null
+            session?.release()
+            session = null
+            throw e
         }
-        mp.prepare()
         player = mp
 
         val mediaSession = MediaSessionCompat(context, "BeishuwaPlayback").apply {
@@ -120,6 +129,14 @@ class AudioPlayback(
                 )
             )
         }
+        // API 33+ 未授予通知权限时直接跳过，避免 SecurityException
+        if (Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
         if (!manager.areNotificationsEnabled()) return
 
         val contentIntent = PendingIntent.getActivity(
@@ -166,7 +183,7 @@ class AudioPlayback(
     }
 
     private fun release() {
-        player?.stop()
+        // 只调用 release()：任何状态下都安全；stop() 在部分状态会抛 IllegalStateException
         player?.release()
         player = null
         session?.release()

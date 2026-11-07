@@ -14,7 +14,7 @@
 背书哇 是一款帮助背诵文言文与古诗词的 Android 应用。<br/>
 内置 60 篇必背篇目（文言文 20 篇 + 古诗词 40 篇），提供注释、译文、朗读与作者资料，致力于让全国高中生摆脱死记硬背的困境。
 
-#### 💬 [背书哇 QQ 交流群：950739151](https://qm.qq.com/cgi-bin/qm/qr?k=群号自行生成)
+#### 💬[背书哇 QQ 交流群：950739151]
 
 #### ⬇️ [下载 APK](https://github.com/HelloZWH-0620/Recite-US_Android/releases) | [📖 源码目录](https://github.com/HelloZWH-0620/Recite-US_Android/tree/main/Beishuwa)
 

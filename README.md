@@ -95,8 +95,9 @@
 <div align="center">
 
 如果这个项目对您有帮助，欢迎点亮 Star ⭐
+
 </div>
 
-![Star History Chart](https://shieldcn.dev/chart/github/stars/HelloZWH-0620/Recit_US_Android.svg)
+![Star History Chart](https://shieldcn.dev/chart/github/stars/HelloZWH-0620/Recite-US_Android.svg)
 
 

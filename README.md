@@ -2,18 +2,17 @@
 
 <div align="center">
 
-# <img src="app/src/main/icon/ReciteUS.ico" height="28" width="28"/> 背书哇 (Recite-US Android)
+# <img src="app/src/main/icon/ReciteUS.ico" height="28" width="28"/> 背书哇（Android）
 
 [![Stars](https://img.shields.io/github/stars/HelloZWH-0620/Recite-US_Android?label=Stars)](https://github.com/HelloZWH-0620/Recite-US_Android)
 [![版本](https://img.shields.io/badge/版本-v1.0.0_Beta-orange?style=flat-square)](https://github.com/HelloZWH-0620/Recite-US_Android/releases)
 ![Android 版本](https://img.shields.io/badge/Android-16-3ddc84?style=flat-square&logo=android)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7f52ff?style=flat-square&logo=kotlin)
-![Material 3](https://img.shields.io/badge/Material_3-原生组件-0052cc?style=flat-square)
-![GitHub Repo size](https://img.shields.io/github/repo-size/HelloZWH-0620/Recite-US_Android?style=flat-square&color=3cb371)
-[![GitHub Repo Languages](https://img.shields.io/github/languages/top/HelloZWH-0620/Recite-US_Android?style=flat-square)](https://github.com/HelloZWH-0620/Recite-US_Android/search?l=kotlin)
+![Material 3](https://img.shields.io/badge/设计规范-Material_3-0052cc?style=flat-square)
 
-背书哇是一款帮助背诵文言文与古诗词的 Android 原生应用。<br/>
-内置 60 篇必背篇目（文言文 20 篇 + 古诗词 40 篇），提供注释、译文、朗读与作者资料，陪你把每一篇背下来。
+
+背书哇 是一款帮助背诵文言文与古诗词的 Android 应用。<br/>
+内置 60 篇必背篇目（文言文 20 篇 + 古诗词 40 篇），提供注释、译文、朗读与作者资料，致力于让全国高中生摆脱死记硬背的困境。
 
 #### 💬[背书哇 QQ 交流群：950739151](https://qm.qq.com/cgi-bin/qm/qr?k=群号自行生成)
 
@@ -25,31 +24,24 @@
 
 ### 文章阅读
 
-- [x] 文言文 / 古诗词双 Tab 列表，sticky header 分组显示篇名与作者
-- [x] 搜索框实时过滤篇目与作者，输入即出搜索建议，点击直达详情
-- [x] 正文页主标题居中、作者右对齐按钮，点击进入作者资料
-- [x] 正文按开关插入译文卡片、注释卡片（灰底白字）
-- [x] 开启注释时正文对应词句自动变色高亮（浅色蓝 / 深色金黄）
-- [x] 文言文逐段首行缩进，词、曲仅首行缩进
+- [x] 文言文 / 古诗词列表
+- [x] 一键查看作者资料
+- [x] 可开启译文、注释（持续优化中）
+
 
 ### 朗读
 
-- [x] 正文底部操作栏一键朗读
-- [x] 实验性功能开启后播放内置朗读音频（人民教育出版社录音资源），由系统媒体中心 / 通知栏控制播放与暂停，播完单篇自动停止
-- [x] 暂缺音频的篇目提示"正在开发中"
+- [x] 正文一键朗读（实验性功能）
 
 ### 作者资料
 
-- [x] 朝代导航（先秦 / 汉 / 魏晋南北朝 / 唐 / 五代 / 宋 / 元 / 明 / 清）与作者列表二级联动
-- [x] 左侧点选定位、右侧滚动高亮，sticky header 分组
-- [x] 作者详情基于内嵌 WebView + 自研 Markdown 渲染器，支持深色模式
-- [x] 作者资料自动抓取自古诗文网并缓存到本地，支持复制链接 / 系统浏览器打开 / 分享
+- [x] 朝代导航，快速检索
+- [x] 作者详情基于内嵌 WebView + Markdown 渲染器
 
 ### 其它功能
 
-- [x] 预测性返回手势跟手动画，与 Android 16 系统导航同步，逐级返回并保留滚动位置
-- [x] Material 3 主题、系统字体与深色模式跟随
-- [x] "我的"页：清除缓存、实验性功能开关（本地朗读 / 横屏旋转）、关于弹窗
+- [x] 预测性返回手势跟手动画（Android 16+）
+- [x] 深色模式
 
 ## 开始使用
 
@@ -82,7 +74,7 @@
 2. 等待 Gradle Sync 完成；
 3. 运行 `app` 的 `assembleDebug` 任务即可生成 APK。
 
-如果您有意愿为背书哇做出代码贡献，欢迎提交 [Pull Request](https://github.com/HelloZWH-0620/Recite-US_Android/pulls)。
+如果您有意愿为背书哇做出代码贡献，请先阅读[贡献指南](CONTRIBUTING.md)来了解如何为背书哇做出贡献（包括资料性纠错、Bug 反馈与代码贡献）。我们欢迎想要为本应用实现新功能或进行改进的同学提交 [Pull Request](https://github.com/HelloZWH-0620/Recite-US_Android/pulls)。
 
 ## 致谢
 

@@ -14,9 +14,9 @@
 背书哇 是一款帮助背诵文言文与古诗词的 Android 应用。<br/>
 内置 60 篇必背篇目（文言文 20 篇 + 古诗词 40 篇），提供注释、译文、朗读与作者资料，致力于让全国高中生摆脱死记硬背的困境。
 
-#### 💬[背书哇 QQ 交流群：950739151](https://qm.qq.com/cgi-bin/qm/qr?k=群号自行生成)
+#### 💬 [背书哇 QQ 交流群：950739151](https://qm.qq.com/cgi-bin/qm/qr?k=群号自行生成)
 
-#### [⬇️ 下载 APK](https://github.com/HelloZWH-0620/Recite-US_Android/releases) | [📖 源码目录](https://github.com/HelloZWH-0620/Recite-US_Android/tree/main/Beishuwa)
+#### ⬇️ [下载 APK](https://github.com/HelloZWH-0620/Recite-US_Android/releases) | [📖 源码目录](https://github.com/HelloZWH-0620/Recite-US_Android/tree/main/Beishuwa)
 
 </div>
 
@@ -31,7 +31,7 @@
 
 ### 朗读
 
-- [x] 正文一键朗读（实验性功能）
+- [ ] 正文一键朗读（实验性功能）
 
 ### 作者资料
 
@@ -49,14 +49,14 @@
 
 - Android 16（API 36）或更高版本的 Android 手机
 
-对于普通用户，可以在以下渠道下载到本应用：
+可以在以下渠道下载到本应用：
 
 - [**GitHub Releases（推荐）**](https://github.com/HelloZWH-0620/Recite-US_Android/releases)
 
 > [!IMPORTANT]
 > 实验性功能（本地音频朗读、横屏旋转）默认关闭，可在【我的】->【设置】->【实验性功能】中开启。
 >
-> 首次使用朗读功能时，系统会申请通知权限，用于在媒体中心显示播放控制。
+> 首次启动应用时，系统会申请通知权限，用于在媒体中心显示播放控制按钮（实验性功能）。
 
 ## 获取帮助＆加入社区
 
@@ -83,10 +83,10 @@
 感谢以下同学为本项目的开发提供支持：
 
 - 作者：[@喔糖圆鼠](https://github.com/HelloZWH-0620)
-- 共创作者：@F15EX、@落星尘、@Motziki、@やわらかな光
+- 共创作者：[@F15EX](https://github.com/ClassTechStar)、@落星尘、[@やわらかな光](https://github.com/TTStudio336)
 - 鸣谢：@2friend、@Clover-Yan、[《重庆日报》](https://www.cqrb.cn/)、南昌雷式学校
 
-本项目使用了 [Kotlin](https://kotlinlang.org/)、[Jetpack Compose](https://developer.android.com/compose)、[Coil](https://coil-kt.github.io/coil/)、[Jsoup](https://jsoup.org/) 等开源库与框架，感谢开源社区。
+本项目使用了 [Kotlin](https://kotlinlang.org/)、[Jetpack Compose](https://developer.android.com/compose)、[Coil](https://coil-kt.github.io/coil/)、[Jsoup](https://jsoup.org/) 等开源库与框架。
 
 ## 许可证
 
@@ -94,6 +94,9 @@
 
 <div align="center">
 
-如果这个项目对您有帮助，请点亮 Star ⭐
-
+如果这个项目对您有帮助，欢迎点亮 Star ⭐
 </div>
+
+![Star History Chart](https://shieldcn.dev/chart/github/stars/HelloZWH-0620/Recit_US_Android.svg)
+
+

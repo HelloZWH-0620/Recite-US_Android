@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteSweep
@@ -77,7 +77,7 @@ fun ProfileScreen() {
         )
 
         Surface(
-            shape = RoundedCornerShape(18.dp),
+            shape = RectangleShape,
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 1.dp,
             modifier = Modifier.fillMaxWidth(),
@@ -212,7 +212,7 @@ fun ProfileScreen() {
 
         Surface(
             onClick = { showDialog = true },
-            shape = RoundedCornerShape(18.dp),
+            shape = RectangleShape,
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 1.dp,
             modifier = Modifier.fillMaxWidth(),

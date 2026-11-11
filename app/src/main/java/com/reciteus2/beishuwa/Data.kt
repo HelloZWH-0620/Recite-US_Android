@@ -8,6 +8,8 @@ data class Note(
     val phrase: String,
     val pos: String,
     val explain: String,
+    // 该注释对应的正文章节序号（与正文按空行分段后的下标一致），-1 表示未标注
+    val section: Int = -1,
 )
 
 data class Article(
@@ -114,8 +116,46 @@ object ReciteRepository {
                 phrase = o.optString("phrase"),
                 pos = o.optString("pos"),
                 explain = o.optString("explain"),
+                section = o.optInt("section", -1),
             )
         }
         return list
+    }
+}
+
+data class WordDef(val meaning: String, val example: String)
+
+data class Word(val word: String, val defs: List<WordDef>)
+
+object WordRepository {
+    private val cache = HashMap<String, List<Word>>()
+
+    fun load(context: Context, assetName: String): List<Word> =
+        cache[assetName] ?: synchronized(this) {
+            cache[assetName] ?: parse(
+                context.assets.open(assetName).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            ).also { cache[assetName] = it }
+        }
+
+    private fun parse(json: String): List<Word> {
+        val root = JSONObject(json)
+        val array = root.getJSONArray("words")
+        val words = ArrayList<Word>(array.length())
+        for (i in 0 until array.length()) {
+            val o = array.getJSONObject(i)
+            val defsJson = o.optJSONArray("defs")
+            val defs = ArrayList<WordDef>(defsJson?.length() ?: 0)
+            if (defsJson != null) {
+                for (j in 0 until defsJson.length()) {
+                    val d = defsJson.getJSONObject(j)
+                    defs += WordDef(
+                        meaning = d.optString("meaning"),
+                        example = d.optString("example"),
+                    )
+                }
+            }
+            words += Word(word = o.getString("word"), defs = defs)
+        }
+        return words
     }
 }

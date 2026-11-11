@@ -1,5 +1,8 @@
 package com.reciteus2.beishuwa
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.PredictiveBackHandler
@@ -28,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.CancellationException
@@ -39,11 +43,22 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         SettingsRepository.init(this)
+        requestNotificationPermission()
         enableEdgeToEdge()
         setContent {
             BeishuwaTheme {
                 BeishuwaApp()
             }
+        }
+    }
+
+    /** Android 13+ 通知权限，用于朗读通知栏与锁屏媒体控制。 */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
         }
     }
 }
@@ -142,14 +157,22 @@ private fun BeishuwaApp() {
         }
     }
 
-    // 横竖屏由实验性功能开关控制：关闭时锁定竖屏
+    // 手机：主界面锁定竖屏，文章/作者页默认竖屏并支持旋转。
+    // 平板：仍由实验性功能开关控制是否允许横竖屏切换。
     val experimental by SettingsRepository.experimental
     val activity = LocalContext.current as? android.app.Activity
-    DisposableEffect(experimental) {
-        activity?.requestedOrientation = if (experimental) {
-            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
-        } else {
-            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    val isPhone = LocalConfiguration.current.smallestScreenWidthDp < 600
+    val atHome = stack.lastOrNull() is Screen.Home
+    DisposableEffect(experimental, isPhone, atHome) {
+        activity?.requestedOrientation = when {
+            !isPhone -> if (experimental) {
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+            } else {
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
+
+            atHome -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
         }
         onDispose { }
     }

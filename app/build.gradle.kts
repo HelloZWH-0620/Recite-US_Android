@@ -11,12 +11,20 @@ android {
         applicationId = "com.reciteus2.beishuwa"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 6111
+        versionName = "1.6.6111"
     }
 
     buildFeatures {
         compose = true
+    }
+
+    buildTypes {
+        release {
+            // 使用调试签名，保证 release 包可直接安装
+            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+        }
     }
 
     packaging {

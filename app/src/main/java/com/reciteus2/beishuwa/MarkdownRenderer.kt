@@ -2,7 +2,7 @@ package com.reciteus2.beishuwa
 
 object MarkdownRenderer {
 
-    fun render(markdown: String, dark: Boolean): String {
+    fun render(markdown: String, dark: Boolean, customFont: Boolean = false): String {
         val body = renderBody(markdown.replace("\r\n", "\n"))
         val background = if (dark) "#12100C" else "#F7F3EA"
         val foreground = if (dark) "#EDE6D8" else "#221F19"
@@ -16,9 +16,15 @@ object MarkdownRenderer {
             <html lang="zh-CN">
             <head>
             <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
             <meta name="color-scheme" content="${if (dark) "dark" else "light"}">
             <style>
+              ${if (customFont) """
+              @font-face {
+                font-family: "AppFont";
+                src: url("file:///android_asset/fonts/Regular.ttf");
+              }
+              """ else ""}
               :root {
                 color-scheme: ${if (dark) "dark" else "light"};
                 --bg: $background;
@@ -36,7 +42,7 @@ object MarkdownRenderer {
                 -webkit-text-size-adjust: 100%;
               }
               body {
-                font-family: -apple-system, "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+                font-family: ${if (customFont) "\"AppFont\", " else ""}-apple-system, "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
                 font-size: 16px;
                 line-height: 1.85;
                 padding: 14px 20px 48px;

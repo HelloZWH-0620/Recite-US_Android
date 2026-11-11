@@ -18,12 +18,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Science
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -36,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -54,6 +63,9 @@ fun ProfileScreen() {
     var showDialog by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     val experimental by remember { SettingsRepository.experimental }
+    val customFont by remember { SettingsRepository.useCustomFont }
+    val fontScale by remember { SettingsRepository.fontScale }
+    val pinchZoom by remember { SettingsRepository.pinchZoomEnabled }
 
     Column(
         modifier = Modifier
@@ -139,7 +151,7 @@ fun ProfileScreen() {
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = "背书哇 v1.0.0 Beta",
+                            text = "背书哇 v1.6.6111",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -161,7 +173,7 @@ fun ProfileScreen() {
                     Column {
                         AboutRow("软件名称", "背书哇")
                         AboutDivider()
-                        AboutRow("版本号", "v1.0.0 Beta · 2026-11-07")
+                        AboutRow("版本号", "v1.6.6111 · 2026-11-11")
                         AboutDivider()
                         AboutRow("作者", "@喔糖圆鼠")
                         AboutDivider()
@@ -199,6 +211,176 @@ fun ProfileScreen() {
                     }
                 },
             )
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Text(
+            text = "字体",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+
+        Surface(
+            shape = RectangleShape,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column {
+                var fontMenuOpen by remember { mutableStateOf(false) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.FormatSize,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.padding(horizontal = 7.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = "字体",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "选择阅读界面使用的字体。",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .clickable { fontMenuOpen = true }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = if (customFont) "自定义字体" else "系统默认字体",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = fontMenuOpen,
+                            onDismissRequest = { fontMenuOpen = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("系统默认字体") },
+                                onClick = {
+                                    SettingsRepository.setCustomFont(context, false)
+                                    fontMenuOpen = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("自定义字体") },
+                                onClick = {
+                                    SettingsRepository.setCustomFont(context, true)
+                                    fontMenuOpen = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                AboutDivider()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.FormatSize,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.padding(horizontal = 7.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = "字体大小",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "调整正文、作者详情与字词的文字大小。",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            SettingsRepository.setFontScale(context, fontScale - 0.05f)
+                        },
+                        enabled = fontScale > SettingsRepository.MIN_FONT_SCALE,
+                    ) {
+                        Icon(Icons.Rounded.Remove, contentDescription = "减小字体")
+                    }
+                    Text(
+                        text = "${(fontScale * 100).roundToInt()}%",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    IconButton(
+                        onClick = {
+                            SettingsRepository.setFontScale(context, fontScale + 0.05f)
+                        },
+                        enabled = fontScale < SettingsRepository.MAX_FONT_SCALE,
+                    ) {
+                        Icon(Icons.Rounded.Add, contentDescription = "增大字体")
+                    }
+                }
+
+                AboutDivider()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.TouchApp,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.padding(horizontal = 7.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = "双指缩放调整字体大小",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "在正文、作者详情与字词页面双指捏合即可缩放。",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = pinchZoom,
+                        onCheckedChange = { SettingsRepository.setPinchZoom(context, it) },
+                        colors = SwitchDefaults.colors(
+                            checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(24.dp))

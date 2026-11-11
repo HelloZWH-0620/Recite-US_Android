@@ -168,8 +168,10 @@ fun ArticleDetailScreen(
     }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val pinchEnabled = SettingsRepository.pinchZoomEnabled.value
 
     if (isLandscape) {
+        AppFontScaled { Box(Modifier.fillMaxSize().pinchToFontScale(pinchEnabled, context)) {
         LandscapeArticleDetail(
             article = article,
             author = author,
@@ -183,9 +185,11 @@ fun ArticleDetailScreen(
             onBack = onBack,
             onOpenAuthor = onOpenAuthor,
         )
+        } }
         return
     }
 
+    AppFontScaled { Box(Modifier.fillMaxSize().pinchToFontScale(pinchEnabled, context)) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -374,6 +378,7 @@ fun ArticleDetailScreen(
             }
         }
     }
+    } }
 }
 
 /**

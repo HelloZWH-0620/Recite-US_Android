@@ -63,7 +63,11 @@ private sealed interface AuthorUiState {
 fun AuthorDetailScreen(author: Author, onBack: () -> Unit) {
     val context = LocalContext.current
     val dark = isSystemInDarkTheme()
-    val fontScale = LocalDensity.current.fontScale
+    val systemFontScale = LocalDensity.current.fontScale
+    val userFontScale = SettingsRepository.fontScale.floatValue
+    val textZoom = ((systemFontScale * userFontScale) * 100f).toInt().coerceIn(80, 200)
+    val pinchEnabled = SettingsRepository.pinchZoomEnabled.value
+    val customFont = SettingsRepository.useCustomFont.value
     val url = remember(author) { AuthorContentRepository.urlFor(author) }
 
     var attempt by remember { mutableIntStateOf(0) }
@@ -85,9 +89,11 @@ fun AuthorDetailScreen(author: Author, onBack: () -> Unit) {
         }
     }
 
+    AppFontScaled {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .pinchToFontScale(pinchEnabled, context)
             .background(MaterialTheme.colorScheme.background),
     ) {
         AuthorTopBar(
@@ -106,20 +112,21 @@ fun AuthorDetailScreen(author: Author, onBack: () -> Unit) {
                     onRetry = { attempt++ },
                 )
                 is AuthorUiState.Ready -> {
-                    val html = remember(current.markdown, dark) {
-                        MarkdownRenderer.render(current.markdown, dark)
+                    val html = remember(current.markdown, dark, customFont) {
+                        MarkdownRenderer.render(current.markdown, dark, customFont)
                     }
-                    key(html, fontScale) {
+                    key(html, dark) {
                         AuthorWebView(
                             html = html,
-                            baseUrl = url,
+                            baseUrl = if (customFont) "file:///android_asset/" else url,
                             dark = dark,
-                            fontScale = fontScale,
+                            textZoom = textZoom,
                         )
                     }
                 }
             }
         }
+    }
     }
 }
 
@@ -246,7 +253,7 @@ private fun AuthorWebView(
     html: String,
     baseUrl: String,
     dark: Boolean,
-    fontScale: Float,
+    textZoom: Int,
 ) {
     AndroidView(
         modifier = Modifier.fillMaxSize(),
@@ -256,8 +263,20 @@ private fun AuthorWebView(
                 settings.javaScriptEnabled = false
                 settings.domStorageEnabled = false
                 settings.loadsImagesAutomatically = false
-                settings.textZoom = (fontScale * 100f).toInt().coerceIn(80, 200)
+                // 禁止 WebView 自身双指缩放，字体缩放统一交给设置 / 双指手势
+                settings.setSupportZoom(false)
+                settings.builtInZoomControls = false
+                settings.displayZoomControls = false
+                settings.textZoom = textZoom
+                tag = html
                 loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null)
+            }
+        },
+        update = { webView ->
+            webView.settings.textZoom = textZoom
+            if (webView.tag != html) {
+                webView.tag = html
+                webView.loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null)
             }
         },
     )

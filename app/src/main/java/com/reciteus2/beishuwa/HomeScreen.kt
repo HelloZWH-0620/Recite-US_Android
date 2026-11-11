@@ -11,6 +11,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -70,6 +73,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -81,7 +85,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     data: ReciteData,
@@ -97,6 +101,13 @@ fun HomeScreen(
     val xuCiWords = remember { WordRepository.load(context, "words.json") }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // 输入法收起后主动清除搜索框焦点，避免输入框保持高亮、光标闪烁
+    val focusManager = LocalFocusManager.current
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible) {
+        if (!imeVisible) focusManager.clearFocus()
+    }
 
     if (isLandscape) {
         LandscapeHome(
@@ -339,6 +350,10 @@ private fun WordPane(
     onSelectTab: (Int) -> Unit,
     landscape: Boolean = false,
 ) {
+    val context = LocalContext.current
+    val pinchEnabled = SettingsRepository.pinchZoomEnabled.value
+    AppFontScaled {
+    Box(Modifier.fillMaxSize().pinchToFontScale(pinchEnabled, context)) {
     Column(Modifier.fillMaxSize()) {
         if (landscape) {
             Row(
@@ -401,6 +416,8 @@ private fun WordPane(
                 }
             }
         }
+    }
+    }
     }
 }
 

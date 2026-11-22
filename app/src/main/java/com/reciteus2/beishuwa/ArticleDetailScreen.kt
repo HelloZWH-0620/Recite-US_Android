@@ -91,9 +91,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import ui.feice.mochi.basic.MochiBarGroup
 import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.MochiBottomToolbar
@@ -126,8 +124,6 @@ fun ArticleDetailScreen(
 
     var notesOn by rememberSaveable { mutableStateOf(false) }
     var translationOn by rememberSaveable { mutableStateOf(false) }
-    var pinyinOn by rememberSaveable { mutableStateOf(false) }
-    var pinyinDict by remember { mutableStateOf<Map<Char, String>?>(null) }
     // 正文字号缩放：100% ~ 125%，按 5% 一档
     var textZoomPercent by rememberSaveable { mutableIntStateOf(100) }
 
@@ -138,24 +134,6 @@ fun ArticleDetailScreen(
         pairTranslation(sections, translationParts)
     }
     val sectionNotes = remember(article, sections) { assignNotes(sections, article.notes) }
-
-    // 注音模式下保留注释高亮：把注释词组映射成字符下标集合
-    val sectionHighlights = remember(sections, sectionNotes, notesOn) {
-        if (!notesOn) sections.map { emptySet<Int>() } else sections.mapIndexed { index, text ->
-            val marks = HashSet<Int>()
-            sectionNotes.getOrNull(index).orEmpty().forEach { note ->
-                val phrase = note.phrase
-                if (phrase.isNotBlank()) {
-                    var at = text.indexOf(phrase)
-                    while (at >= 0) {
-                        for (i in at until at + phrase.length) marks.add(i)
-                        at = text.indexOf(phrase, at + 1)
-                    }
-                }
-            }
-            marks
-        }
-    }
 
     // 正文统一字号；作品详情沿用它，只靠字重和颜色区分层级
     val textZoom = textZoomPercent / 100f
@@ -200,7 +178,7 @@ fun ArticleDetailScreen(
     val toggleAudio: () -> Unit = {
         when {
             !audioAvailable ->
-                Toast.makeText(context, "该篇目暂无录音", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "正在开发中", Toast.LENGTH_SHORT).show()
 
             audioStarted -> {
                 // 播放/暂停切换，保留当前进度
@@ -291,10 +269,8 @@ fun ArticleDetailScreen(
                     onAutoCollapse = onAudioAutoCollapse,
                     translationOn = translationOn,
                     notesOn = notesOn,
-                    pinyinOn = pinyinOn,
                     onTranslationChange = { translationOn = it },
                     onNotesChange = { notesOn = it },
-                    onPinyinChange = { pinyinOn = it },
                     zoomPercent = textZoomPercent,
                     onZoomPercentChange = { textZoomPercent = it },
                 )
@@ -375,28 +351,10 @@ fun ArticleDetailScreen(
                             fontSize = bodyFontSize,
                             lineHeight = bodyLineHeight,
                             color = MaterialTheme.colorScheme.onBackground,
-                            pinyinColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                            highlight = if (notesOn) sectionHighlights.getOrElse(index) { emptySet() } else emptySet(),
-                            highlightColor = highlightColor,
-                            firstLineIndent = indent != TextIndent.None,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        Text(
-                            text = if (notesOn) {
-                                highlightSection(section, article.notes, highlightColor)
-                            } else {
-                                AnnotatedString(section)
-                            },
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontSize = bodyFontSize,
-                                lineHeight = bodyLineHeight,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                textIndent = indent,
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
+                            textIndent = indent,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
 
                     if (translationOn) {
                         pairedTranslation.getOrNull(index)?.let { translation ->
@@ -653,22 +611,8 @@ private fun LandscapeArticleDetail(
                                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start))
                                 .padding(start = 18.dp, end = 18.dp),
                         ) {
-                            sections.forEachIndexed { index, section ->
-                                if (pinyinOn) {
-                                    RubyParagraph(
-                                        text = section,
-                                        dict = pinyinDict,
-                                        fontSize = 16.sp,
-                                        lineHeight = 28.sp,
-                                        color = MaterialTheme.colorScheme.onBackground,
-                                        pinyinColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                                        highlight = if (rightTab == 1) sectionHighlights.getOrElse(index) { emptySet() } else emptySet(),
-                                        highlightColor = highlightColor,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                } else {
-                                    Text(text = section, style = bodyStyle)
-                                }
+                            sections.forEach { section ->
+                                Text(text = section, style = bodyStyle)
                                 Spacer(Modifier.height(16.dp))
                             }
                         }
@@ -836,10 +780,8 @@ private fun ArticleBottomControls(
     onAutoCollapse: () -> Unit,
     translationOn: Boolean,
     notesOn: Boolean,
-    pinyinOn: Boolean,
     onTranslationChange: (Boolean) -> Unit,
     onNotesChange: (Boolean) -> Unit,
-    onPinyinChange: (Boolean) -> Unit,
     zoomPercent: Int,
     onZoomPercentChange: (Int) -> Unit,
 ) {
@@ -993,10 +935,8 @@ private fun formatClock(ms: Long): String {
 private fun ColumnScope.DisplayPanel(
     translationOn: Boolean,
     notesOn: Boolean,
-    pinyinOn: Boolean,
     onTranslationChange: (Boolean) -> Unit,
     onNotesChange: (Boolean) -> Unit,
-    onPinyinChange: (Boolean) -> Unit,
     zoomPercent: Int,
     onZoomPercentChange: (Int) -> Unit,
 ) {
@@ -1009,11 +949,6 @@ private fun ColumnScope.DisplayPanel(
         label = "注释",
         checked = notesOn,
         onCheckedChange = onNotesChange,
-    )
-    DisplayCheckRow(
-        label = "拼音",
-        checked = pinyinOn,
-        onCheckedChange = onPinyinChange,
     )
     Spacer(Modifier.height(6.dp))
     Row(

@@ -25,6 +25,10 @@ class AudioPlayback(
         PlaybackService.stop(context)
     }
 
+    fun seekTo(positionMs: Long) {
+        PlaybackService.seekTo(context, positionMs)
+    }
+
     val title: String
         get() = PlaybackService.currentTitle
 }

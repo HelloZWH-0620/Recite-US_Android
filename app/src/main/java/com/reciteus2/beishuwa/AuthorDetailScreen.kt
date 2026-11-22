@@ -8,6 +8,7 @@ import android.net.Uri
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,8 +19,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -28,10 +31,7 @@ import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +44,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,6 +57,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import ui.feice.mochi.basic.MochiAlign
+import ui.feice.mochi.basic.MochiPopoverBox
+import ui.feice.mochi.theme.MochiTheme
 
 private sealed interface AuthorUiState {
     data object Loading : AuthorUiState
@@ -70,6 +77,18 @@ fun AuthorDetailScreen(author: Author, onBack: () -> Unit) {
     val pinchEnabled = SettingsRepository.pinchZoomEnabled.value
     val customFont = SettingsRepository.useCustomFont.value
     val url = remember(author) { AuthorContentRepository.urlFor(author) }
+
+    // 作者页 HTML 统一使用 app 的主题色（mochi 语义色），不再自建配色
+    val colors = MochiTheme.colorScheme
+    val markdownTheme = MarkdownTheme(
+        background = colors.background.toHex(),
+        foreground = colors.onBackground.toHex(),
+        muted = colors.onSurfaceVariant.toHex(),
+        accent = colors.primary.toHex(),
+        accentSoft = colors.surfaceContainerHigh.toHex(),
+        rule = colors.outlineVariant.toHex(),
+    )
+    val webBackground = colors.background.toArgb()
 
     var attempt by remember { mutableIntStateOf(0) }
     var state by remember(author) { mutableStateOf<AuthorUiState>(AuthorUiState.Loading) }
@@ -113,14 +132,14 @@ fun AuthorDetailScreen(author: Author, onBack: () -> Unit) {
                     onRetry = { attempt++ },
                 )
                 is AuthorUiState.Ready -> {
-                    val html = remember(current.markdown, dark, customFont) {
-                        MarkdownRenderer.render(current.markdown, dark, customFont)
+                    val html = remember(current.markdown, dark, customFont, markdownTheme) {
+                        MarkdownRenderer.render(current.markdown, dark, customFont, markdownTheme)
                     }
                     key(html, dark) {
                         AuthorWebView(
                             html = html,
                             baseUrl = if (customFont) "file:///android_asset/" else url,
-                            dark = dark,
+                            backgroundColor = webBackground,
                             textZoom = textZoom,
                         )
                     }
@@ -164,41 +183,75 @@ private fun AuthorTopBar(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Box {
-            MochiGlassIconButton(
-                icon = Icons.Rounded.MoreVert,
-                contentDescription = "更多",
-                onClick = { menuOpen = true },
-            )
-            DropdownMenu(
+            MochiPopoverBox(
                 expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-            ) {
-                DropdownMenuItem(
-                    text = { Text("复制页面链接") },
-                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
-                    onClick = {
-                        menuOpen = false
-                        onCopy()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("用系统浏览器打开") },
-                    leadingIcon = { Icon(Icons.Rounded.OpenInBrowser, contentDescription = null) },
-                    onClick = {
-                        menuOpen = false
-                        onOpenBrowser()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("分享") },
-                    leadingIcon = { Icon(Icons.Rounded.Share, contentDescription = null) },
-                    onClick = {
-                        menuOpen = false
-                        onShare()
-                    },
-                )
-            }
+                onExpandedChange = { menuOpen = it },
+                width = 220.dp,
+                align = MochiAlign.End,
+                anchor = {
+                    MochiGlassIconButton(
+                        icon = Icons.Rounded.MoreVert,
+                        contentDescription = "更多",
+                        onClick = { menuOpen = true },
+                    )
+                },
+                popover = {
+                    PopoverActionRow(
+                        icon = Icons.Rounded.ContentCopy,
+                        label = "复制页面链接",
+                        onClick = {
+                            menuOpen = false
+                            onCopy()
+                        },
+                    )
+                    PopoverActionRow(
+                        icon = Icons.Rounded.OpenInBrowser,
+                        label = "用系统浏览器打开",
+                        onClick = {
+                            menuOpen = false
+                            onOpenBrowser()
+                        },
+                    )
+                    PopoverActionRow(
+                        icon = Icons.Rounded.Share,
+                        label = "分享",
+                        onClick = {
+                            menuOpen = false
+                            onShare()
+                        },
+                    )
+                },
+            )
         }
+    }
+}
+
+@Composable
+private fun PopoverActionRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MochiTheme.colorScheme.onSurface,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = label,
+            style = MochiTheme.textStyles.body,
+            color = MochiTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -250,14 +303,14 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
 private fun AuthorWebView(
     html: String,
     baseUrl: String,
-    dark: Boolean,
+    backgroundColor: Int,
     textZoom: Int,
 ) {
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context ->
             WebView(context).apply {
-                setBackgroundColor(webColor(if (dark) "#12100C" else "#F7F3EA"))
+                setBackgroundColor(backgroundColor)
                 settings.javaScriptEnabled = false
                 settings.domStorageEnabled = false
                 settings.loadsImagesAutomatically = false
@@ -280,7 +333,7 @@ private fun AuthorWebView(
     )
 }
 
-private fun webColor(value: String): Int = android.graphics.Color.parseColor(value)
+private fun Color.toHex(): String = "#%06X".format(0xFFFFFF and toArgb())
 
 private fun copyLink(context: Context, url: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

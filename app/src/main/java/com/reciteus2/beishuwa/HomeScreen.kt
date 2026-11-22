@@ -2,6 +2,7 @@ package com.reciteus2.beishuwa
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -39,8 +40,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
@@ -99,6 +102,7 @@ import ui.feice.mochi.basic.MochiTabBar
 import ui.feice.mochi.basic.MochiTabBarDefaults
 import ui.feice.mochi.basic.MochiTabItem
 import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.basic.MochiPageControl
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -115,6 +119,8 @@ fun HomeScreen(
     var wordTab by rememberSaveable { mutableIntStateOf(1) }
     var query by rememberSaveable { mutableStateOf("") }
     var searchActive by rememberSaveable { mutableStateOf(false) }
+    // 进入练习会话（答题/选题）时隐藏底部 dock，让内容占满
+    var practiceActive by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val shiCiWords = remember { WordRepository.load(context, "shici.json") }
     val xuCiWords = remember { WordRepository.load(context, "words.json") }
@@ -148,6 +154,8 @@ fun HomeScreen(
             onQueryChange = { query = it },
             onOpenArticle = onOpenArticle,
             onOpenAuthor = onOpenAuthor,
+            practiceActive = practiceActive,
+            onPracticeActiveChange = { practiceActive = it },
         )
     } else {
         PortraitHome(
@@ -166,6 +174,8 @@ fun HomeScreen(
             onQueryChange = { query = it },
             onOpenArticle = onOpenArticle,
             onOpenAuthor = onOpenAuthor,
+            practiceActive = practiceActive,
+            onPracticeActiveChange = { practiceActive = it },
         )
     }
 }
@@ -187,6 +197,8 @@ private fun PortraitHome(
     onQueryChange: (String) -> Unit,
     onOpenArticle: (Article) -> Unit,
     onOpenAuthor: (Author) -> Unit,
+    practiceActive: Boolean,
+    onPracticeActiveChange: (Boolean) -> Unit,
 ) {
     val backdrop = rememberMochiBackdrop()
     CompositionLocalProvider(LocalMochiBackdrop provides backdrop) {
@@ -194,10 +206,17 @@ private fun PortraitHome(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            MochiTabBar(
-                selectedIndex = rootTab,
-                onSelect = onRootTabChange,
-                items = persistentListOf(
+            // 练习答题时自动收起 dock；dock 整体再抬高一点
+            AnimatedVisibility(
+                visible = !practiceActive,
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom),
+            ) {
+                MochiTabBar(
+                    selectedIndex = rootTab,
+                    onSelect = onRootTabChange,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                    items = persistentListOf(
                     MochiTabItem(
                         label = "背书",
                         icon = { tint -> Icon(Icons.Rounded.MenuBook, contentDescription = null, tint = tint) },
@@ -219,7 +238,8 @@ private fun PortraitHome(
                     height = 56.dp,
                     itemWidth = 76.dp,
                 ),
-            )
+                )
+            }
         },
     ) {
         Box(
@@ -327,7 +347,7 @@ private fun PortraitHome(
                             .statusBarsPadding()
                             .mochiBackdropSource(backdrop),
                     ) {
-                        PracticePane(data = data)
+                        PracticePane(data = data, onActiveChange = onPracticeActiveChange)
                     }
                 } else {
                     Box(
@@ -362,6 +382,8 @@ private fun LandscapeHome(
     onQueryChange: (String) -> Unit,
     onOpenArticle: (Article) -> Unit,
     onOpenAuthor: (Author) -> Unit,
+    practiceActive: Boolean,
+    onPracticeActiveChange: (Boolean) -> Unit,
 ) {
     val isTablet = LocalConfiguration.current.smallestScreenWidthDp >= 600
     val searchWidth = minOf(
@@ -454,21 +476,31 @@ private fun LandscapeHome(
                         landscape = true,
                     )
                 } else if (rootTab == 2) {
-                    PracticePane(data = data, landscape = true)
+                    PracticePane(
+                        data = data,
+                        landscape = true,
+                        onActiveChange = onPracticeActiveChange,
+                    )
                 } else {
                     ProfileScreen()
                 }
             }
 
             // 搜索建议浮层：覆盖正文，避免撑开顶部栏
-            // 右下角：悬浮胶囊导航
-            FloatingCapsule(
-                selected = rootTab,
-                onSelect = onRootTabChange,
+            // 右下角：悬浮胶囊导航（练习答题时自动收起）
+            AnimatedVisibility(
+                visible = !practiceActive,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = 16.dp),
-            )
+                    .padding(end = 20.dp, bottom = 20.dp),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                FloatingCapsule(
+                    selected = rootTab,
+                    onSelect = onRootTabChange,
+                )
+            }
         }
     }
 }
@@ -542,15 +574,48 @@ private fun WordPane(
                 }
             }
 
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                itemsIndexed(words) { _, word ->
-                    WordCard(
-                        word = word,
-                        modifier = Modifier.fillMaxWidth(),
+            else -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                // 手机端：mochi 左右轮播，卡片高度随当前页内容自适应
+                val listState = rememberLazyListState()
+                val scope = rememberCoroutineScope()
+                val cardWidth = maxWidth - 32.dp
+                val pitchPx = with(LocalDensity.current) { (cardWidth + 12.dp).toPx() }
+                Column(Modifier.fillMaxSize()) {
+                    LazyRow(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                            .animateContentSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        flingBehavior = rememberSnapFlingBehavior(lazyListState = listState),
+                    ) {
+                        itemsIndexed(words) { _, word ->
+                            WordCard(
+                                word = word,
+                                modifier = Modifier.width(cardWidth),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    MochiPageControl(
+                        pageCount = words.size,
+                        position = {
+                            val info = listState.layoutInfo
+                            val first = info.visibleItemsInfo.firstOrNull()
+                            if (first == null) {
+                                0f
+                            } else {
+                                val scrolled = (info.viewportStartOffset - first.offset).toFloat()
+                                (first.index + scrolled / pitchPx)
+                                    .coerceIn(0f, (words.size - 1).toFloat())
+                            }
+                        },
+                        onPageSelect = { scope.launch { listState.animateScrollToItem(it) } },
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(bottom = 88.dp),
                     )
                 }
             }
@@ -1156,7 +1221,12 @@ private fun AuthorPane(
                 if (firstIndex >= headerIndexes[i]) section = i else break
             }
             val lastVisible = info.visibleItemsInfo.lastOrNull() ?: return@collect
-            if (lastVisible.index >= info.totalItemsCount - 1) {
+            // 只有「真正滚到底」（不能继续向前，但还能往回滚）才强制高亮最后一组；
+            // 否则点击左侧朝代后联动滚动途中会被强制拽回最后一组，
+            // 内容不满一屏（根本不能滚）时也不会覆盖点击结果
+            if (!rightState.canScrollForward && rightState.canScrollBackward &&
+                lastVisible.index >= info.totalItemsCount - 1
+            ) {
                 section = sections.lastIndex
             }
             val dynastyIndex = ReciteData.DYNASTY_ORDER.indexOf(sections[section].dynasty)

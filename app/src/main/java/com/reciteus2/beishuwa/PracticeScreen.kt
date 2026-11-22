@@ -2,17 +2,23 @@ package com.reciteus2.beishuwa
 
 import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,6 +31,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Style
@@ -35,18 +42,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ui.feice.mochi.basic.MochiButton
 import ui.feice.mochi.basic.MochiButtonStyle
@@ -60,25 +74,51 @@ import ui.feice.mochi.theme.MochiTheme
 private sealed interface PracticeRoute {
     data object Home : PracticeRoute
     data object Picker : PracticeRoute
-    data class Session(val article: Article) : PracticeRoute
+    data class Session(val articles: List<Article>) : PracticeRoute
 }
 
 /** 练习板块：与「字词」同级的根页面，卡片式入口。 */
 @Composable
-fun PracticePane(data: ReciteData, landscape: Boolean = false) {
+fun PracticePane(
+    data: ReciteData,
+    landscape: Boolean = false,
+    onActiveChange: (Boolean) -> Unit = {},
+) {
     val context = LocalContext.current
     var route by remember { mutableStateOf<PracticeRoute>(PracticeRoute.Home) }
     var showRangeDialog by remember { mutableStateOf(false) }
+    var showNotice by rememberSaveable { mutableStateOf(true) }
+    val backProgress = remember { Animatable(0f) }
 
-    BackHandler(enabled = route != PracticeRoute.Home) {
-        route = when (route) {
-            is PracticeRoute.Session -> PracticeRoute.Picker
-            else -> PracticeRoute.Home
+    // 进入选题/答题时通知外层隐藏底部 dock
+    LaunchedEffect(route) {
+        onActiveChange(route != PracticeRoute.Home)
+    }
+    DisposableEffect(Unit) {
+        onDispose { onActiveChange(false) }
+    }
+
+    // 系统侧滑返回：跟手位移 + 松手回弹
+    PredictiveBackHandler(enabled = route != PracticeRoute.Home) { progress ->
+        try {
+            progress.collect { backProgress.snapTo(it.progress) }
+            route = when (route) {
+                is PracticeRoute.Session -> PracticeRoute.Picker
+                else -> PracticeRoute.Home
+            }
+        } finally {
+            backProgress.animateTo(0f)
         }
     }
 
     AppFontScaled {
-        Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationX = backProgress.value * size.width * 0.35f
+                },
+        ) {
             when (val current = route) {
                 PracticeRoute.Home -> PracticeHome(
                     landscape = landscape,
@@ -91,11 +131,11 @@ fun PracticePane(data: ReciteData, landscape: Boolean = false) {
                 PracticeRoute.Picker -> ArticlePicker(
                     data = data,
                     onBack = { route = PracticeRoute.Home },
-                    onSelect = { route = PracticeRoute.Session(it) },
+                    onConfirm = { route = PracticeRoute.Session(it) },
                 )
 
                 is PracticeRoute.Session -> MemorizationSession(
-                    article = current.article,
+                    articles = current.articles,
                     onBack = { route = PracticeRoute.Picker },
                 )
             }
@@ -116,8 +156,20 @@ fun PracticePane(data: ReciteData, landscape: Boolean = false) {
                 role = MochiDialogActionRole.Primary,
             ) {
                 showRangeDialog = false
-                data.articles.randomOrNull()?.let { route = PracticeRoute.Session(it) }
+                // 全部范围：从不同篇目中随机抽 3 篇一起出题
+                val picks = data.articles.shuffled().take(3)
+                if (picks.isNotEmpty()) route = PracticeRoute.Session(picks)
             },
+        ),
+    )
+
+    MochiDialog(
+        visible = showNotice,
+        onDismissRequest = { showNotice = false },
+        title = "完善中",
+        message = "可能存在学科性漏洞。",
+        actions = persistentListOf(
+            MochiDialogAction("好") { showNotice = false },
         ),
     )
 }
@@ -268,7 +320,7 @@ private fun pinyinInitial(title: String): String {
 private fun ArticlePicker(
     data: ReciteData,
     onBack: () -> Unit,
-    onSelect: (Article) -> Unit,
+    onConfirm: (List<Article>) -> Unit,
 ) {
     val groups = remember(data.articles) { groupArticles(data.articles) }
     val labels = remember(groups) { persistentListOf(*groups.map { it.letter }.toTypedArray()) }
@@ -280,9 +332,30 @@ private fun ArticlePicker(
     }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val selected = remember { mutableStateListOf<Article>() }
+    val canConfirm = selected.isNotEmpty()
 
     Column(Modifier.fillMaxSize()) {
-        PracticeTopBar(title = "选择篇目", onBack = onBack)
+        PracticeTopBar(
+            title = "选择篇目（${selected.size}）",
+            onBack = onBack,
+        ) {
+            MochiButton(
+                onClick = { if (canConfirm) onConfirm(selected.toList()) },
+                modifier = Modifier.size(40.dp),
+                enabled = canConfirm,
+                style = MochiButtonStyle.ProminentGlass,
+                cornerRadius = 20.dp,
+                contentPadding = PaddingValues(0.dp),
+                minHeight = 40.dp,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = "开始出题",
+                    tint = ui.feice.mochi.theme.LocalContentColor.current,
+                )
+            }
+        }
         Box(Modifier.fillMaxSize()) {
             LazyColumn(
                 state = listState,
@@ -299,20 +372,49 @@ private fun ArticlePicker(
                         )
                     }
                     items(group.articles, key = { it.id }) { article ->
+                        val isSelected = selected.any { it.id == article.id }
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 8.dp)
-                                .clickable { onSelect(article) },
+                                .clickable {
+                                    if (isSelected) {
+                                        selected.removeAll { it.id == article.id }
+                                    } else {
+                                        selected.add(article)
+                                    }
+                                },
                             shape = MochiTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerLow
+                            },
                         ) {
-                            Text(
-                                text = article.title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
+                            Row(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
-                            )
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = article.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (isSelected) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -331,7 +433,11 @@ private fun ArticlePicker(
 }
 
 @Composable
-private fun PracticeTopBar(title: String, onBack: () -> Unit) {
+private fun PracticeTopBar(
+    title: String,
+    onBack: () -> Unit,
+    trailing: @Composable RowScope.() -> Unit = {},
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -348,12 +454,14 @@ private fun PracticeTopBar(title: String, onBack: () -> Unit) {
             text = title,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f),
         )
+        trailing()
     }
 }
 
 @Composable
-private fun MemorizationSession(article: Article, onBack: () -> Unit) {
+private fun MemorizationSession(articles: List<Article>, onBack: () -> Unit) {
     val context = LocalContext.current
     var questions by remember { mutableStateOf<List<PracticeQuestion>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -361,15 +469,16 @@ private fun MemorizationSession(article: Article, onBack: () -> Unit) {
     var submitted by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableStateOf(0) }
     val answers = remember { mutableStateMapOf<Int, String>() }
+    val articleIds = remember(articles) { articles.map { it.id } }
 
-    LaunchedEffect(article.id, reloadKey) {
+    LaunchedEffect(articleIds, reloadKey) {
         loading = true
         error = null
         submitted = false
         answers.clear()
         AiQuestionRepository.generateMemorization(
             context = context,
-            article = article,
+            articles = articles,
         ).onSuccess {
             questions = it
         }.onFailure {
@@ -378,7 +487,7 @@ private fun MemorizationSession(article: Article, onBack: () -> Unit) {
         loading = false
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().imePadding()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -393,14 +502,24 @@ private fun MemorizationSession(article: Article, onBack: () -> Unit) {
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = article.title,
+                    text = if (articles.size == 1) {
+                        articles.first().title
+                    } else {
+                        "已选 ${articles.size} 篇"
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
-                    text = article.author,
+                    text = if (articles.size == 1) {
+                        articles.first().author
+                    } else {
+                        articles.joinToString("、") { it.title }
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -445,20 +564,40 @@ private fun MemorizationSession(article: Article, onBack: () -> Unit) {
             }
 
             else -> {
+                val listState = rememberLazyListState()
+                val scope = rememberCoroutineScope()
+                var focusedIndex by remember { mutableStateOf<Int?>(null) }
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = if (focusedIndex != null) 260.dp else 12.dp,
+                    ),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     itemsIndexed(questions) { index, question ->
                         val userAnswer = answers[index].orEmpty()
                         val correct = submitted && isAnswerCorrect(userAnswer, question)
+                        val focused = focusedIndex == index
                         Surface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateContentSize(),
                             shape = MochiTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            color = if (focused) {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerLow
+                            },
                         ) {
-                            Column(Modifier.padding(16.dp)) {
+                            Column(
+                                Modifier
+                                    .padding(16.dp)
+                                    .then(if (focused) Modifier.heightIn(min = 180.dp) else Modifier),
+                            ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = "第 ${index + 1} 题",
@@ -488,7 +627,19 @@ private fun MemorizationSession(article: Article, onBack: () -> Unit) {
                                 MochiTextField(
                                     value = userAnswer,
                                     onValueChange = { answers[index] = it },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .onFocusChanged { state ->
+                                            if (state.isFocused) {
+                                                focusedIndex = index
+                                                scope.launch {
+                                                    delay(120)
+                                                    listState.animateScrollToItem(index)
+                                                }
+                                            } else if (focusedIndex == index) {
+                                                focusedIndex = null
+                                            }
+                                        },
                                     placeholder = "填写答案",
                                     singleLine = false,
                                     maxLines = 3,
@@ -510,7 +661,8 @@ private fun MemorizationSession(article: Article, onBack: () -> Unit) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .navigationBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     MochiButton(

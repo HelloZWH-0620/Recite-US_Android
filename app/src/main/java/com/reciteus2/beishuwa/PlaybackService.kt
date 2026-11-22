@@ -34,12 +34,16 @@ class PlaybackService : Service() {
     private var author: String = ""
 
     private val handler = Handler(Looper.getMainLooper())
+    private var tickCount = 0
+
     private val ticker = object : Runnable {
         override fun run() {
             if (player != null) {
+                // 进度条需要更细的位置更新，通知仍然每秒刷新一次
                 publishState()
-                postNotification()
-                handler.postDelayed(this, 1000L)
+                tickCount++
+                if (tickCount % 4 == 0) postNotification()
+                handler.postDelayed(this, 250L)
             }
         }
     }
@@ -63,6 +67,16 @@ class PlaybackService : Service() {
 
         @Volatile
         var currentTitle: String = ""
+            private set
+
+        /** 当前播放位置（毫秒），供页面进度条读取 */
+        @Volatile
+        var currentPositionMs: Long = 0L
+            private set
+
+        /** 当前音频总时长（毫秒） */
+        @Volatile
+        var durationMs: Long = 0L
             private set
 
         fun start(context: Context, assetName: String, title: String, author: String) {
@@ -200,6 +214,8 @@ class PlaybackService : Service() {
         mp.start()
         player = mp
         isPlaying = true
+        currentPositionMs = 0L
+        durationMs = mp.duration.toLong()
 
         session?.apply {
             setMetadata(
@@ -219,6 +235,8 @@ class PlaybackService : Service() {
 
     private fun publishState() {
         val mp = player ?: return
+        currentPositionMs = mp.currentPosition.toLong()
+        durationMs = mp.duration.toLong()
         val state = when {
             mp.isPlaying -> PlaybackStateCompat.STATE_PLAYING
             else -> PlaybackStateCompat.STATE_PAUSED
@@ -335,6 +353,8 @@ class PlaybackService : Service() {
         }
         player = null
         isPlaying = false
+        currentPositionMs = 0L
+        durationMs = 0L
     }
 
     private fun createChannel() {

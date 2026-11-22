@@ -15,6 +15,7 @@ object SettingsRepository {
     private const val KEY_AI_API_KEY = "ai_api_key"
     private const val KEY_AI_USE_AAAS = "ai_use_aaas"
     private const val KEY_TABLET_ROTATION = "tablet_rotation"
+    private const val KEY_AUDIO_ENABLED = "audio_enabled"
 
     /** 可选的 AI 模型标识 */
     const val AI_MODEL_FLASH = "deepseek-v4.1-flash-1017"
@@ -26,6 +27,9 @@ object SettingsRepository {
     const val MAX_FONT_SCALE = 1.6f
 
     val experimental = mutableStateOf(false)
+
+    /** 是否开启正文音频朗读（默认开启，已从实验性功能移出） */
+    val audioEnabled = mutableStateOf(true)
 
     /** 是否使用 wordtype/Regular.ttf 自定义字体（默认开启） */
     val useCustomFont = mutableStateOf(true)
@@ -57,6 +61,7 @@ object SettingsRepository {
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
         experimental.value = prefs.getBoolean(KEY_EXPERIMENTAL, false)
+        audioEnabled.value = prefs.getBoolean(KEY_AUDIO_ENABLED, true)
         useCustomFont.value = prefs.getBoolean(KEY_CUSTOM_FONT, true)
         fontScale.floatValue = prefs.getFloat(KEY_FONT_SCALE, 1f)
             .coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)
@@ -71,6 +76,11 @@ object SettingsRepository {
     fun setExperimental(context: Context, value: Boolean) {
         experimental.value = value
         prefs(context).edit().putBoolean(KEY_EXPERIMENTAL, value).apply()
+    }
+
+    fun setAudioEnabled(context: Context, value: Boolean) {
+        audioEnabled.value = value
+        prefs(context).edit().putBoolean(KEY_AUDIO_ENABLED, value).apply()
     }
 
     fun setCustomFont(context: Context, value: Boolean) {

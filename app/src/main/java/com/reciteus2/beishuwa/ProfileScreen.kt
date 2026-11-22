@@ -3,16 +3,28 @@ package com.reciteus2.beishuwa
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.graphics.RectangleShape
@@ -21,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.FormatSize
@@ -30,9 +43,8 @@ import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +52,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +61,7 @@ import androidx.compose.runtime.setValue
 import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -57,12 +71,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import ui.feice.mochi.basic.MochiAlign
+import ui.feice.mochi.basic.MochiActivityIndicator
 import ui.feice.mochi.basic.MochiButton
+import ui.feice.mochi.basic.MochiButtonStyle
+import ui.feice.mochi.basic.MochiDialog
+import ui.feice.mochi.basic.MochiDialogAction
+import ui.feice.mochi.basic.MochiIconButton
+import ui.feice.mochi.basic.MochiPopoverBox
 import ui.feice.mochi.basic.MochiSheet
 import ui.feice.mochi.basic.MochiSwitch
 import ui.feice.mochi.basic.MochiTextField
 import ui.feice.mochi.basic.rememberMochiSheetState
+import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 
 @Composable
@@ -73,9 +96,14 @@ fun ProfileScreen() {
     var showDialog by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     val experimental by remember { SettingsRepository.experimental }
+    val audioEnabled by remember { SettingsRepository.audioEnabled }
     val tabletRotation by remember { SettingsRepository.tabletRotation }
     val useAaasSpec by remember { SettingsRepository.useAaasSpec }
     var showExperimentalPanel by remember { mutableStateOf(false) }
+    // 右侧浮动面板：用 MutableTransitionState 驱动进出场动画，退出动画播完再移除 Popup
+    val experimentalPanelTransition = remember { MutableTransitionState(false) }
+    var checkingConnection by remember { mutableStateOf(false) }
+    var connectionError by remember { mutableStateOf<String?>(null) }
     val customFont by remember { SettingsRepository.useCustomFont }
     val fontScale by remember { SettingsRepository.fontScale }
     val pinchZoom by remember { SettingsRepository.pinchZoomEnabled }
@@ -158,7 +186,7 @@ fun ProfileScreen() {
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = "背书哇 v1.6.6111",
+                            text = "背书哇 v1.6.1122",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -172,53 +200,61 @@ fun ProfileScreen() {
             }
         }
 
-        if (showAbout) {
-            AlertDialog(
-                onDismissRequest = { showAbout = false },
-                title = { Text("软件信息") },
-                text = {
-                    Column {
-                        AboutRow("软件名称", "背书哇")
-                        AboutDivider()
-                        AboutRow("版本号", "v1.6.6111 · 2026-11-11")
-                        AboutDivider()
-                        AboutRow("作者", "@喔糖圆鼠")
-                        AboutDivider()
-                        AboutRow("共创作者", "@F15EX @落星尘 @Motziki @やわらかな光")
-                        AboutDivider()
-                        AboutRow("鸣谢", "@2friend @Clover-Yan 《重庆日报》 南昌雷式学校")
-                        AboutDivider()
-                        AboutRow("录音资源", "人民教育出版社")
-                        AboutDivider()
-                        AboutLinkRow(
-                            label = "交流群",
-                            value = "950739151",
-                            onClick = {
-                                clipboardManager.setText(AnnotatedString("950739151"))
-                                Toast.makeText(context, "群号已复制到剪贴板", Toast.LENGTH_SHORT).show()
-                            },
-                        )
-                        AboutDivider()
-                        AboutLinkRow(
-                            label = "正文资源",
-                            value = "https://github.com/clover-yan/gaokao-poetry",
-                            onClick = { openUrl(context, "https://github.com/clover-yan/gaokao-poetry") },
-                        )
-                        AboutDivider()
-                        AboutLinkRow(
-                            label = "源代码地址",
-                            value = "https://github.com/HelloZWH-0620/Reciting-us",
-                            onClick = { openUrl(context, "https://github.com/HelloZWH-0620/Reciting-us") },
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showAbout = false }) {
-                        Text("关闭")
-                    }
-                },
-            )
-        }
+        MochiDialog(
+            visible = showAbout,
+            onDismissRequest = { showAbout = false },
+            title = "软件信息",
+            content = {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 440.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    AboutRow("软件名称", "背书哇")
+                    AboutDivider()
+                    AboutRow("版本号", "v1.6.1122 · 2026-11-22")
+                    AboutDivider()
+                    AboutRow("作者", "@喔糖圆鼠")
+                    AboutDivider()
+                    AboutRow("共创作者", "@F15EX @落星尘 @Motziki @やわらかな光")
+                    AboutDivider()
+                    AboutRow("鸣谢", "@2friend @Clover-Yan 《重庆日报》 南昌雷式学校")
+                    AboutDivider()
+                    AboutRow("录音资源", "人民教育出版社")
+                    AboutDivider()
+                    AboutLinkRow(
+                        label = "UI",
+                        value = "https://github.com/feice11/mochi",
+                        onClick = { openUrl(context, "https://github.com/feice11/mochi") },
+                    )
+                    AboutDivider()
+                    AboutLinkRow(
+                        label = "交流群",
+                        value = "950739151",
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString("950739151"))
+                            Toast.makeText(context, "群号已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                        },
+                    )
+                    AboutDivider()
+                    AboutLinkRow(
+                        label = "正文资源",
+                        value = "https://github.com/clover-yan/gaokao-poetry",
+                        onClick = { openUrl(context, "https://github.com/clover-yan/gaokao-poetry") },
+                    )
+                    AboutDivider()
+                    AboutLinkRow(
+                        label = "源代码地址",
+                        value = "https://github.com/HelloZWH-0620/Reciting-us",
+                        onClick = { openUrl(context, "https://github.com/HelloZWH-0620/Reciting-us") },
+                    )
+                }
+            },
+            actions = persistentListOf(
+                MochiDialogAction("关闭") { showAbout = false },
+            ),
+        )
 
         Spacer(Modifier.height(24.dp))
 
@@ -261,44 +297,49 @@ fun ProfileScreen() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Box {
-                        Row(
-                            modifier = Modifier
-                                .clickable { fontMenuOpen = true }
-                                .padding(horizontal = 6.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = if (customFont) "自定义字体" else "系统默认字体",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowDropDown,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = fontMenuOpen,
-                            onDismissRequest = { fontMenuOpen = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("系统默认字体") },
+                    MochiPopoverBox(
+                        expanded = fontMenuOpen,
+                        onExpandedChange = { fontMenuOpen = it },
+                        width = 200.dp,
+                        align = MochiAlign.End,
+                        anchor = {
+                            Row(
+                                modifier = Modifier
+                                    .clickable { fontMenuOpen = true }
+                                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = if (customFont) "自定义字体" else "系统默认字体",
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        },
+                        popover = {
+                            ProfileOptionRow(
+                                label = "系统默认字体",
+                                selected = !customFont,
                                 onClick = {
                                     SettingsRepository.setCustomFont(context, false)
                                     fontMenuOpen = false
                                 },
                             )
-                            DropdownMenuItem(
-                                text = { Text("自定义字体") },
+                            ProfileOptionRow(
+                                label = "自定义字体",
+                                selected = customFont,
                                 onClick = {
                                     SettingsRepository.setCustomFont(context, true)
                                     fontMenuOpen = false
                                 },
                             )
-                        }
-                    }
+                        },
+                    )
                 }
 
                 AboutDivider()
@@ -360,27 +401,27 @@ fun ProfileScreen() {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.TouchApp,
+                        imageVector = Icons.Rounded.VolumeUp,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.padding(horizontal = 7.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = "双指缩放调整字体大小",
+                            text = "音频朗读",
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = "在正文、作者详情与字词页面双指捏合即可缩放。",
+                            text = "在正文页播放内置音频，并使用媒体通知控制。",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     MochiSwitch(
-                        checked = pinchZoom,
-                        onCheckedChange = { SettingsRepository.setPinchZoom(context, it) },
+                        checked = audioEnabled,
+                        onCheckedChange = { SettingsRepository.setAudioEnabled(context, it) },
                     )
                 }
             }
@@ -421,49 +462,55 @@ fun ProfileScreen() {
                         )
                     }
                     Spacer(Modifier.height(10.dp))
-                    Box {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { modelMenuOpen = true }
-                                .background(MaterialTheme.colorScheme.surfaceContainer)
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = aiModelLabel(aiModel),
-                                fontSize = 15.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowDropDown,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = modelMenuOpen,
-                            onDismissRequest = { modelMenuOpen = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("DeepSeek V4.1 Flash 1017") },
+                    MochiPopoverBox(
+                        expanded = modelMenuOpen,
+                        onExpandedChange = { modelMenuOpen = it },
+                        width = 260.dp,
+                        align = MochiAlign.Start,
+                        cover = true,
+                        anchor = {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { modelMenuOpen = true }
+                                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = aiModelLabel(aiModel),
+                                    fontSize = 15.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        },
+                        popover = {
+                            ProfileOptionRow(
+                                label = "DeepSeek V4.1 Flash 1017",
+                                selected = aiModel == SettingsRepository.AI_MODEL_FLASH,
                                 onClick = {
                                     SettingsRepository.setAiModel(context, SettingsRepository.AI_MODEL_FLASH)
                                     modelMenuOpen = false
                                 },
                             )
-                            DropdownMenuItem(
-                                text = { Text("DeepSeek V4.1 Pro 1017") },
+                            ProfileOptionRow(
+                                label = "DeepSeek V4.1 Pro 1017",
+                                selected = aiModel == SettingsRepository.AI_MODEL_PRO,
                                 onClick = {
                                     SettingsRepository.setAiModel(context, SettingsRepository.AI_MODEL_PRO)
                                     modelMenuOpen = false
                                 },
                             )
-                        }
-                    }
+                        },
+                    )
                 }
 
                 AboutDivider()
@@ -570,55 +617,98 @@ fun ProfileScreen() {
         Spacer(Modifier.height(88.dp))
     }
 
-    if (showExperimentalPanel) {
+    LaunchedEffect(showExperimentalPanel) {
+        experimentalPanelTransition.targetState = showExperimentalPanel
+    }
+
+    if (experimentalPanelTransition.currentState || experimentalPanelTransition.targetState) {
         Popup(
-            alignment = Alignment.CenterEnd,
+            alignment = Alignment.TopStart,
             onDismissRequest = { showExperimentalPanel = false },
             properties = PopupProperties(focusable = true),
         ) {
-            Surface(
-                modifier = Modifier
-                    .padding(12.dp)
-                    .width(300.dp),
-                shape = MochiTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shadowElevation = 16.dp,
-            ) {
-                Column(Modifier.padding(vertical = 8.dp)) {
-                    Row(
+            // 遮罩跟随开关淡入淡出
+            val scrim by animateFloatAsState(
+                targetValue = if (showExperimentalPanel) 1f else 0f,
+                label = "experimentalScrim",
+            )
+            Box(Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.18f * scrim))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { showExperimentalPanel = false },
+                )
+                // 浮动面板：参考 mochi 浮动侧边栏，从右侧向左滑入，四周留 8dp 悬浮
+                AnimatedVisibility(
+                    visibleState = experimentalPanelTransition,
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+                    exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
+                ) {
+                    Surface(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .padding(horizontal = 8.dp, vertical = 8.dp)
+                            .fillMaxHeight()
+                            .width(300.dp),
+                        shape = MochiTheme.shapes.extraLarge,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shadowElevation = 16.dp,
                     ) {
-                        Text(
-                            text = "实验性功能",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { showExperimentalPanel = false }) {
-                            Icon(Icons.Rounded.Close, contentDescription = "关闭")
+                        Column(
+                            modifier = Modifier
+                                .statusBarsPadding()
+                                .verticalScroll(rememberScrollState())
+                                .padding(vertical = 8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 18.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "实验性功能",
+                                    style = MochiTheme.textStyles.navTitle,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                MochiIconButton(
+                                    onClick = { showExperimentalPanel = false },
+                                    style = MochiButtonStyle.Tonal,
+                                    size = 32.dp,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = "关闭",
+                                        tint = MochiTheme.colorScheme.onSurface,
+                                        modifier = Modifier.width(16.dp),
+                                    )
+                                }
+                            }
+                            ExperimentalToggleRow(
+                                title = "平板横竖屏切换",
+                                description = "允许平板随设备方向旋转。",
+                                checked = tabletRotation,
+                                onCheckedChange = { SettingsRepository.setTabletRotation(context, it) },
+                            )
+                            ExperimentalToggleRow(
+                                title = "AAAS 题库规范",
+                                description = "按 AAAS 格式出题，默认关闭。",
+                                checked = useAaasSpec,
+                                onCheckedChange = { SettingsRepository.setUseAaasSpec(context, it) },
+                            )
+                            ExperimentalToggleRow(
+                                title = "双指缩放调整字体大小",
+                                description = "在正文、作者详情与字词页面双指捏合即可缩放。",
+                                checked = pinchZoom,
+                                onCheckedChange = { SettingsRepository.setPinchZoom(context, it) },
+                            )
                         }
                     }
-                    ExperimentalToggleRow(
-                        title = "音频朗读",
-                        description = "正文页播放音频，并使用媒体通知控制。",
-                        checked = experimental,
-                        onCheckedChange = { SettingsRepository.setExperimental(context, it) },
-                    )
-                    ExperimentalToggleRow(
-                        title = "平板横竖屏切换",
-                        description = "允许平板随设备方向旋转。",
-                        checked = tabletRotation,
-                        onCheckedChange = { SettingsRepository.setTabletRotation(context, it) },
-                    )
-                    ExperimentalToggleRow(
-                        title = "AAAS 题库规范",
-                        description = "按 AAAS 格式出题，默认关闭。",
-                        checked = useAaasSpec,
-                        onCheckedChange = { SettingsRepository.setUseAaasSpec(context, it) },
-                    )
                 }
             }
         }
@@ -629,12 +719,43 @@ fun ProfileScreen() {
         onDismiss = { advancedSheet.hide() },
     ) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-            Text(
-                text = "高级选项",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(20.dp))
+            // 右上角圆形对勾：验证连通性，成功后自动收起面板
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                MochiIconButton(
+                    onClick = {
+                        if (checkingConnection) return@MochiIconButton
+                        checkingConnection = true
+                        scope.launch {
+                            val result = AiQuestionRepository.testConnection()
+                            checkingConnection = false
+                            result
+                                .onSuccess { advancedSheet.hide() }
+                                .onFailure { connectionError = it.message ?: "连接失败" }
+                        }
+                    },
+                    enabled = !checkingConnection,
+                    style = MochiButtonStyle.Filled,
+                    size = 38.dp,
+                ) {
+                    if (checkingConnection) {
+                        MochiActivityIndicator(
+                            size = 18.dp,
+                            color = LocalContentColor.current,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = "验证并保存",
+                            tint = LocalContentColor.current,
+                            modifier = Modifier.width(18.dp),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = "接口地址",
                 fontSize = 16.sp,
@@ -653,16 +774,19 @@ fun ProfileScreen() {
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = SettingsRepository.DEFAULT_AI_BASE_URL,
             )
-            Spacer(Modifier.height(24.dp))
-            MochiButton(
-                onClick = { advancedSheet.hide() },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("完成")
-            }
             Spacer(Modifier.height(16.dp))
         }
     }
+
+    MochiDialog(
+        visible = connectionError != null,
+        onDismissRequest = { connectionError = null },
+        title = "连接失败",
+        message = connectionError.orEmpty(),
+        actions = persistentListOf(
+            MochiDialogAction("好") { connectionError = null },
+        ),
+    )
 
     if (showDialog) {
         AlertDialog(
@@ -802,6 +926,39 @@ private fun ExperimentalToggleRow(
 private fun aiModelLabel(model: String): String = when (model) {
     SettingsRepository.AI_MODEL_PRO -> "DeepSeek V4.1 Pro 1017"
     else -> "DeepSeek V4.1 Flash 1017"
+}
+
+/** 弹出层里的单个选项行：文字 + 选中勾。 */
+@Composable
+private fun ProfileOptionRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MochiTheme.textStyles.body,
+            color = MochiTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = null,
+                tint = MochiTheme.colorScheme.primary,
+                modifier = Modifier.width(18.dp),
+            )
+        }
+    }
 }
 
 @Composable

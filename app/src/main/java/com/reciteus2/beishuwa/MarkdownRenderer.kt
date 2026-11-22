@@ -1,15 +1,24 @@
 package com.reciteus2.beishuwa
 
+/** 作者页 HTML 用到的主题色（来自 app 的 mochi 语义色，不再自定义配色）。 */
+data class MarkdownTheme(
+    val background: String,
+    val foreground: String,
+    val muted: String,
+    val accent: String,
+    val accentSoft: String,
+    val rule: String,
+)
+
 object MarkdownRenderer {
 
-    fun render(markdown: String, dark: Boolean, customFont: Boolean = false): String {
+    fun render(
+        markdown: String,
+        dark: Boolean,
+        customFont: Boolean = false,
+        theme: MarkdownTheme,
+    ): String {
         val body = renderBody(markdown.replace("\r\n", "\n"))
-        val background = if (dark) "#12100C" else "#F7F3EA"
-        val foreground = if (dark) "#EDE6D8" else "#221F19"
-        val muted = if (dark) "#B9AF9B" else "#5C5647"
-        val accent = if (dark) "#E0BC63" else "#8A6A1F"
-        val accentSoft = if (dark) "rgba(224,188,99,0.14)" else "rgba(138,106,31,0.10)"
-        val rule = if (dark) "rgba(255,255,255,0.10)" else "rgba(0,0,0,0.08)"
 
         return """
             <!DOCTYPE html>
@@ -27,12 +36,12 @@ object MarkdownRenderer {
               """ else ""}
               :root {
                 color-scheme: ${if (dark) "dark" else "light"};
-                --bg: $background;
-                --fg: $foreground;
-                --muted: $muted;
-                --accent: $accent;
-                --accent-soft: $accentSoft;
-                --rule: $rule;
+                --bg: ${theme.background};
+                --fg: ${theme.foreground};
+                --muted: ${theme.muted};
+                --accent: ${theme.accent};
+                --accent-soft: ${theme.accentSoft};
+                --rule: ${theme.rule};
               }
               html, body {
                 margin: 0;

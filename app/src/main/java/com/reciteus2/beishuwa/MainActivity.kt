@@ -34,6 +34,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
+import kotlinx.collections.immutable.persistentListOf
+import ui.feice.mochi.basic.MochiDialog
+import ui.feice.mochi.basic.MochiDialogAction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -82,6 +85,28 @@ private sealed interface Screen {
 @Composable
 private fun BeishuwaApp() {
     val context = LocalContext.current
+
+    // 平板暂时限制进入：尚未完成适配，仅弹提示并允许退出
+    val isTabletDevice = LocalConfiguration.current.smallestScreenWidthDp >= 600
+    if (isTabletDevice) {
+        val host = context as? android.app.Activity
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        )
+        MochiDialog(
+            visible = true,
+            onDismissRequest = { },
+            title = "设备适配中",
+            message = "当前版本尚未完成平板适配，请使用手机进入。",
+            actions = persistentListOf(
+                MochiDialogAction("好") { host?.finish() },
+            ),
+        )
+        return
+    }
+
     val data = remember(context) { ReciteRepository.load(context) }
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
     val scope = rememberCoroutineScope()

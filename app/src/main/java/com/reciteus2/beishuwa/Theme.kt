@@ -252,6 +252,8 @@ fun MochiGlassIconButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
+            // 跟随玻璃按钮前景色，避免深色模式下图标变黑
+            tint = ui.feice.mochi.theme.LocalContentColor.current,
             modifier = Modifier.size(20.dp),
         )
     }

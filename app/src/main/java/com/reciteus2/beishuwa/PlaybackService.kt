@@ -331,9 +331,15 @@ class PlaybackService : Service() {
     }
 
     private fun postNotification() {
+        // Android 13+ 没有通知权限时 notify() 会抛 SecurityException，
+        // areNotificationsEnabled() 不足以覆盖权限被拒的情况，这里显式检查并兜底。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return
         val manager = NotificationManagerCompat.from(this)
         if (!manager.areNotificationsEnabled()) return
-        manager.notify(NOTIFICATION_ID, buildNotification())
+        runCatching { manager.notify(NOTIFICATION_ID, buildNotification()) }
     }
 
     private fun stopPlayback() {

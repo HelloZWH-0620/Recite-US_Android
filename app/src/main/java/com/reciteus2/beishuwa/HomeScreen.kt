@@ -241,9 +241,12 @@ private fun PortraitHome(
                 )
             }
         },
-    ) {
+    ) { innerPadding ->
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                // 尊重 Scaffold 的底部内边距：否则列表最后一项会被 56dp 标签栏压住
+                .padding(bottom = innerPadding.calculateBottomPadding()),
             contentAlignment = Alignment.TopCenter,
         ) {
             Column(

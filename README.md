@@ -2,7 +2,7 @@
 
 <div align="center">
 
-# <img src="app/src/main/icon/ReciteUS2.png" height="28" width="28"/> 背书哇（Android）
+# <img src="app/src/main/icon/ReciteUS2.ico" height="28" width="28"/> 背书哇（Android）
 
 [![Stars](https://img.shields.io/github/stars/HelloZWH-0620/Recite-US_Android?label=Stars)](https://github.com/HelloZWH-0620/Recite-US_Android)
 [![版本](https://img.shields.io/badge/版本-v1.6.6111-orange?style=flat-square)](https://github.com/HelloZWH-0620/Recite-US_Android/releases)
@@ -14,9 +14,9 @@
 背书哇 是一款帮助背诵文言文与古诗词的 Android 应用。<br/>
 内置 60 篇必背篇目（文言文 20 篇 + 古诗词 40 篇）与 120 个实词、18 个虚词，提供注释、译文、朗读与作者资料，致力于让全国高中生摆脱死记硬背的困境。
 
-#### 💬[背书哇 QQ 交流群：950739151]
+#### 💬[加入 QQ 交流群](https://qm.qq.com/q/nk8BvTndTy)
 
-#### ⬇️ [下载 APK](https://github.com/HelloZWH-0620/Recite-US_Android/releases) | [📖 源码目录](https://github.com/HelloZWH-0620/Recite-US_Android/tree/main/Beishuwa)
+#### ⬇️ [下载 APK](https://github.com/HelloZWH-0620/Recite-US_Android/releases) 
 
 </div>
 
@@ -73,7 +73,7 @@
 
 ## 获取帮助＆加入社区
 
-[![加入 QQ 群](https://img.shields.io/badge/QQ_%E4%BA%A4%E6%B5%81%E7%BE%A4-950739151-%230066cc?style=flat-square&logo=TencentQQ)](https://qm.qq.com/cgi-bin/qm/qr?k=群号自行生成)
+[![加入 QQ 群](https://img.shields.io/badge/QQ_%E4%BA%A4%E6%B5%81%E7%BE%A4-950739151-%230066cc?style=flat-square&logo=TencentQQ)](https://qm.qq.com/q/nk8BvTndTy)
 
 如果您确定您遇到的问题是一个 **Bug**，或者您要提出一项**新的功能**，请[提交 Issue](https://github.com/HelloZWH-0620/Recite-US_Android/issues/new)。
 
@@ -108,6 +108,8 @@
 本项目基于 [GNU General Public License v3.0](LICENSE.txt) 获得许可。
 
 第三方组件遵循各自许可协议，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+---
 
 <div align="center">
 

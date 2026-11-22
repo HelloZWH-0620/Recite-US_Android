@@ -274,7 +274,15 @@ private fun AuthorWebView(
             webView.settings.textZoom = textZoom
             if (webView.tag != html) {
                 webView.tag = html
-                webView.loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null)
+                webView.                loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null)
+            }
+        },
+        // 离开组合时释放 WebView：否则每进一次作者页都会残留一个实例
+        onRelease = { webView ->
+            runCatching {
+                webView.stopLoading()
+                webView.loadUrl("about:blank")
+                webView.destroy()
             }
         },
     )

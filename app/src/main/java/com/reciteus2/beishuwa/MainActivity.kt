@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -25,24 +27,32 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         SettingsRepository.init(this)
+        // 拼音词典（43 KB / 3297 字）后台预热：等用户点「拼音」时已就绪
+        Thread {
+            runCatching { PinyinDict.get(applicationContext) }
+        }.apply { isDaemon = true; name = "pinyin-dict-preload" }.start()
         requestNotificationPermission()
         enableEdgeToEdge()
         setContent {
@@ -82,7 +92,16 @@ private sealed interface Screen {
 @Composable
 private fun BeishuwaApp() {
     val context = LocalContext.current
-    val data = remember(context) { ReciteRepository.load(context) }
+    // recite.json 解析（60 篇 + 作者表）放到 IO 线程：主线程同步解析会阻塞首帧，
+    // 冷启动后第一次滑动也会跟着抖。
+    val data by produceState<ReciteData?>(initialValue = null, context) {
+        value = withContext(Dispatchers.IO) { ReciteRepository.load(context) }
+    }
+    val reciteData = data
+    if (reciteData == null) {
+        LoadingScreen()
+        return
+    }
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
     val scope = rememberCoroutineScope()
     val stateHolder = rememberSaveableStateHolder()
@@ -160,7 +179,9 @@ private fun BeishuwaApp() {
     // 手机：主界面锁定竖屏，文章/作者页默认竖屏并支持旋转。
     // 平板：仍由实验性功能开关控制是否允许横竖屏切换。
     val tabletRotation by SettingsRepository.tabletRotation
-    val activity = LocalContext.current as? android.app.Activity
+    // LocalContext 在部分宿主里是 ContextWrapper，强转会得到 null 导致旋转设置失效；
+    // androidx.activity 提供的 LocalActivity 直接给出 Activity。
+    val activity = LocalActivity.current
     val isPhone = LocalConfiguration.current.smallestScreenWidthDp < 600
     val atHome = stack.lastOrNull() is Screen.Home
     DisposableEffect(tabletRotation, isPhone, atHome) {
@@ -205,7 +226,7 @@ private fun BeishuwaApp() {
             ) {
                 key(screen.key) {
                     stateHolder.SaveableStateProvider(screen.key) {
-                        RenderScreen(screen, data, push = { push(it) }, pop = { pop() })
+                        RenderScreen(screen, reciteData, push = { push(it) }, pop = { pop() })
                     }
                 }
             }
@@ -219,6 +240,18 @@ private fun BeishuwaApp() {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun LoadingScreen() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
     }
 }
 

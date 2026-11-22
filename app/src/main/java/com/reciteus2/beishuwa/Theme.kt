@@ -1,28 +1,31 @@
 package com.reciteus2.beishuwa
 
-import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
 import android.graphics.Typeface
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme as materialDark
+import androidx.compose.material3.lightColorScheme as materialLight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,65 +37,22 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.core.view.WindowCompat
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
-
-private val LightColors = lightColorScheme(
-    // 浅色模式：天蓝主题
-    primary = Color(0xFF0277BD),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFD6ECFA),
-    onPrimaryContainer = Color(0xFF00324A),
-    secondary = Color(0xFF535353),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFDDDEE0),
-    onSecondaryContainer = Color(0xFF1A1A1A),
-    tertiary = Color(0xFF4A4A4A),
-    onTertiary = Color(0xFFFFFFFF),
-    background = Color(0xFFF0F1F3),
-    onBackground = Color(0xFF1A1A1A),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1A1A1A),
-    surfaceVariant = Color(0xFFDDDEE0),
-    onSurfaceVariant = Color(0xFF535353),
-    outline = Color(0xFF808183),
-    outlineVariant = Color(0xFFDDDEE0),
-    error = Color(0xFFB3261E),
-    onError = Color(0xFFFFFFFF),
-)
-
-private val DarkColors = darkColorScheme(
-    // 深色模式：金黄主题
-    primary = Color(0xFFFFC83D),
-    onPrimary = Color(0xFF1A1A1A),
-    primaryContainer = Color(0xFF4A3A00),
-    onPrimaryContainer = Color(0xFFFFE7A3),
-    secondary = Color(0xFFCACBCD),
-    onSecondary = Color(0xFF1A1A1A),
-    secondaryContainer = Color(0xFF3A3A3A),
-    onSecondaryContainer = Color(0xFFF0F1F3),
-    tertiary = Color(0xFFBFC1C4),
-    onTertiary = Color(0xFF1A1A1A),
-    background = Color(0xFF000000),
-    onBackground = Color(0xFFF0F1F3),
-    surface = Color(0xFF1A1A1A),
-    onSurface = Color(0xFFF0F1F3),
-    surfaceVariant = Color(0xFF2A2B2D),
-    onSurfaceVariant = Color(0xFFDDDEE0),
-    outline = Color(0xFF808183),
-    outlineVariant = Color(0xFF3A3A3A),
-    error = Color(0xFFF2B8B5),
-    onError = Color(0xFF1A1A1A),
-)
+import ui.feice.mochi.theme.MochiColorScheme
+import ui.feice.mochi.theme.MochiGlassDefaults
+import ui.feice.mochi.theme.MochiShapes
+import ui.feice.mochi.theme.MochiTextStyles
+import ui.feice.mochi.basic.MochiButton
+import ui.feice.mochi.basic.MochiButtonStyle
+import ui.feice.mochi.ios.MochiIosTheme
+import ui.feice.mochi.theme.MochiTheme
+import ui.feice.mochi.theme.defaultShapes
+import ui.feice.mochi.theme.defaultTextStyles
 
 /** 自定义字体（resource/wordtype/Regular.ttf），失败时回退系统默认字体。 */
 object AppFonts {
@@ -108,7 +68,7 @@ object AppFonts {
     }
 }
 
-private fun Typography.withFontFamily(family: FontFamily) = Typography(
+private fun MochiTextStyles.withFontFamily(family: FontFamily) = copy(
     displayLarge = displayLarge.copy(fontFamily = family),
     displayMedium = displayMedium.copy(fontFamily = family),
     displaySmall = displaySmall.copy(fontFamily = family),
@@ -124,48 +84,175 @@ private fun Typography.withFontFamily(family: FontFamily) = Typography(
     labelLarge = labelLarge.copy(fontFamily = family),
     labelMedium = labelMedium.copy(fontFamily = family),
     labelSmall = labelSmall.copy(fontFamily = family),
+    largeTitle = largeTitle.copy(fontFamily = family),
+    navTitle = navTitle.copy(fontFamily = family),
+    body = body.copy(fontFamily = family),
+    subhead = subhead.copy(fontFamily = family),
+    footnote = footnote.copy(fontFamily = family),
 )
+
+private fun MochiTextStyles.toMaterialTypography() = Typography(
+    displayLarge = displayLarge,
+    displayMedium = displayMedium,
+    displaySmall = displaySmall,
+    headlineLarge = headlineLarge,
+    headlineMedium = headlineMedium,
+    headlineSmall = headlineSmall,
+    titleLarge = titleLarge,
+    titleMedium = titleMedium,
+    titleSmall = titleSmall,
+    bodyLarge = bodyLarge,
+    bodyMedium = bodyMedium,
+    bodySmall = bodySmall,
+    labelLarge = labelLarge,
+    labelMedium = labelMedium,
+    labelSmall = labelSmall,
+)
+
+private fun MochiShapes.toMaterialShapes() = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+)
+
+private fun MochiColorScheme.toMaterialColors() = if (isDark) {
+    materialDark(
+        primary = primary,
+        onPrimary = onPrimary,
+        primaryContainer = primaryContainer,
+        onPrimaryContainer = onPrimaryContainer,
+        inversePrimary = inversePrimary,
+        secondary = secondary,
+        onSecondary = onSecondary,
+        secondaryContainer = secondaryContainer,
+        onSecondaryContainer = onSecondaryContainer,
+        tertiary = tertiary,
+        onTertiary = onTertiary,
+        tertiaryContainer = tertiaryContainer,
+        onTertiaryContainer = onTertiaryContainer,
+        // iOS 分组列表底色：卡片浮在略深一层的背景上
+        background = if (isDark) surfaceContainerLowest else surfaceContainer,
+        onBackground = onSurface,
+        surface = surface,
+        onSurface = onSurface,
+        surfaceVariant = surfaceVariant,
+        onSurfaceVariant = onSurfaceVariant,
+        surfaceTint = surfaceTint,
+        inverseSurface = inverseSurface,
+        inverseOnSurface = inverseOnSurface,
+        error = error,
+        onError = onError,
+        errorContainer = errorContainer,
+        onErrorContainer = onErrorContainer,
+        outline = outline,
+        outlineVariant = outlineVariant,
+        scrim = scrim,
+        surfaceBright = surfaceBright,
+        surfaceDim = surfaceDim,
+        surfaceContainerLowest = surfaceContainerLowest,
+        surfaceContainerLow = surfaceContainerLow,
+        surfaceContainer = surfaceContainer,
+        surfaceContainerHigh = surfaceContainerHigh,
+        surfaceContainerHighest = surfaceContainerHighest,
+    )
+} else {
+    materialLight(
+        primary = primary,
+        onPrimary = onPrimary,
+        primaryContainer = primaryContainer,
+        onPrimaryContainer = onPrimaryContainer,
+        inversePrimary = inversePrimary,
+        secondary = secondary,
+        onSecondary = onSecondary,
+        secondaryContainer = secondaryContainer,
+        onSecondaryContainer = onSecondaryContainer,
+        tertiary = tertiary,
+        onTertiary = onTertiary,
+        tertiaryContainer = tertiaryContainer,
+        onTertiaryContainer = onTertiaryContainer,
+        // iOS 分组列表底色：卡片浮在略深一层的背景上
+        background = if (isDark) surfaceContainerLowest else surfaceContainer,
+        onBackground = onSurface,
+        surface = surface,
+        onSurface = onSurface,
+        surfaceVariant = surfaceVariant,
+        onSurfaceVariant = onSurfaceVariant,
+        surfaceTint = surfaceTint,
+        inverseSurface = inverseSurface,
+        inverseOnSurface = inverseOnSurface,
+        error = error,
+        onError = onError,
+        errorContainer = errorContainer,
+        onErrorContainer = onErrorContainer,
+        outline = outline,
+        outlineVariant = outlineVariant,
+        scrim = scrim,
+        surfaceBright = surfaceBright,
+        surfaceDim = surfaceDim,
+        surfaceContainerLowest = surfaceContainerLowest,
+        surfaceContainerLow = surfaceContainerLow,
+        surfaceContainer = surfaceContainer,
+        surfaceContainerHigh = surfaceContainerHigh,
+        surfaceContainerHighest = surfaceContainerHighest,
+    )
+}
 
 @Composable
 fun BeishuwaTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val view = LocalView.current
     val context = LocalContext.current
+    val dark = isSystemInDarkTheme()
     val useCustomFont = SettingsRepository.useCustomFont.value
 
-    val typography = remember(useCustomFont) {
-        val base = Typography()
+    val mochiTextStyles = remember(useCustomFont) {
+        val base = defaultTextStyles()
         if (useCustomFont) base.withFontFamily(AppFonts.custom(context)) else base
     }
-    val defaultTextStyle = LocalTextStyle.current
+    val mochiShapes = remember { defaultShapes() }
 
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = view.context.findActivity()?.window ?: return@SideEffect
-            WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = !dark
-                isAppearanceLightNavigationBars = !dark
+    // 全局使用 mochi 的 iOS 外观：系统语义色（浅色蓝、深色亮蓝）与 iOS 控件配色
+    MochiIosTheme(
+        isDark = dark,
+        textStyles = mochiTextStyles,
+        shapes = mochiShapes,
+        glass = true,
+        blur = true,
+        glassMaterial = MochiGlassDefaults.Thick,
+    ) {
+        val mochiColors = MochiTheme.colorScheme
+        MaterialTheme(
+            colorScheme = mochiColors.toMaterialColors(),
+            typography = mochiTextStyles.toMaterialTypography(),
+            shapes = mochiShapes.toMaterialShapes(),
+        ) {
+            CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyLarge) {
+                content()
             }
         }
     }
-    CompositionLocalProvider(
-        LocalTextStyle provides if (useCustomFont) {
-            defaultTextStyle.copy(fontFamily = AppFonts.custom(context))
-        } else {
-            defaultTextStyle
-        },
+}
+
+/** Mochi 风格的悬浮玻璃圆形按钮（返回、更多等）。 */
+@Composable
+fun MochiGlassIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    MochiButton(
+        onClick = onClick,
+        modifier = modifier.size(44.dp),
+        style = MochiButtonStyle.Glass,
+        cornerRadius = 22.dp,
+        contentPadding = PaddingValues(0.dp),
+        minHeight = 44.dp,
     ) {
-        MaterialTheme(
-            colorScheme = if (dark) DarkColors else LightColors,
-            typography = typography,
-            shapes = Shapes(
-                extraSmall = RoundedCornerShape(0.dp),
-                small = RoundedCornerShape(0.dp),
-                medium = RoundedCornerShape(0.dp),
-                large = RoundedCornerShape(0.dp),
-                extraLarge = RoundedCornerShape(0.dp),
-            ),
-            content = content,
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -264,10 +351,4 @@ fun Modifier.pinchToFontScale(enabled: Boolean, context: Context): Modifier {
             }
         }
     }
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
 }

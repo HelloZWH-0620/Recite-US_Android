@@ -43,6 +43,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Notes
+import androidx.compose.material.icons.rounded.TextDecrease
+import androidx.compose.material.icons.rounded.TextIncrease
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Icon
@@ -69,6 +71,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -81,6 +84,15 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import kotlinx.coroutines.delay
+import ui.feice.mochi.basic.MochiBarGroup
+import ui.feice.mochi.basic.MochiBarIconButton
+import ui.feice.mochi.basic.MochiBottomToolbar
+import ui.feice.mochi.basic.MochiButtonStyle
+import ui.feice.mochi.basic.MochiCheckbox
+import ui.feice.mochi.basic.MochiIconButton
+import ui.feice.mochi.basic.MochiPopoverButton
+import ui.feice.mochi.basic.MochiToolbarScaffold
+import ui.feice.mochi.theme.MochiTheme
 
 private fun audioAssetExists(context: Context, articleId: String): Boolean =
     try {
@@ -101,6 +113,8 @@ fun ArticleDetailScreen(
 
     var notesOn by rememberSaveable { mutableStateOf(false) }
     var translationOn by rememberSaveable { mutableStateOf(false) }
+    // 正文字号缩放：100% ~ 125%，按 5% 一档
+    var textZoomPercent by rememberSaveable { mutableIntStateOf(100) }
 
     val highlightColor = MaterialTheme.colorScheme.primaryContainer
 
@@ -110,6 +124,11 @@ fun ArticleDetailScreen(
         pairTranslation(sections, translationParts)
     }
     val sectionNotes = remember(article, sections) { assignNotes(sections, article.notes) }
+
+    // 正文统一字号；作品详情沿用它，只靠字重和颜色区分层级
+    val textZoom = textZoomPercent / 100f
+    val bodyFontSize = (18f * textZoom).sp
+    val bodyLineHeight = (32f * textZoom).sp
 
     // 说明：原有一套从未被触发的 TTS 代码（每打开一篇文章都会初始化一个
     // TextToSpeech 引擎但没有任何入口把 speaking 置为 true）已移除；
@@ -189,10 +208,34 @@ fun ArticleDetailScreen(
         return
     }
 
-    AppFontScaled { Box(Modifier.fillMaxSize().pinchToFontScale(pinchEnabled, context)) {
+    val portraitScroll = rememberScrollState()
+    val collapseDistancePx = with(LocalDensity.current) { 56.dp.toPx() }
+    val compactTitleAlpha = (portraitScroll.value / collapseDistancePx).coerceIn(0f, 1f)
+
+    AppFontScaled {
+        MochiToolbarScaffold(
+            background = MaterialTheme.colorScheme.background,
+            toolbar = {
+                ArticleBottomControls(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth(),
+                    experimental = experimental,
+                    audioPlaying = audioPlaying,
+                    onToggleAudio = toggleAudio,
+                    translationOn = translationOn,
+                    notesOn = notesOn,
+                    onTranslationChange = { translationOn = it },
+                    onNotesChange = { notesOn = it },
+                    zoomPercent = textZoomPercent,
+                    onZoomPercentChange = { textZoomPercent = it },
+                )
+            },
+        ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .pinchToFontScale(pinchEnabled, context)
             .background(MaterialTheme.colorScheme.background),
     ) {
         Column(
@@ -202,23 +245,14 @@ fun ArticleDetailScreen(
                 .fillMaxWidth()
                 .fillMaxHeight()
                 .align(Alignment.TopCenter)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(portraitScroll),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
+            // 固定顶栏的占位
+            Spacer(
+                Modifier
                     .statusBarsPadding()
                     .height(56.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.Rounded.ArrowBack,
-                        contentDescription = "返回",
-                        tint = MaterialTheme.colorScheme.onBackground,
-                    )
-                }
-            }
+            )
 
             Column(Modifier.padding(horizontal = 24.dp)) {
                 Text(
@@ -260,8 +294,8 @@ fun ArticleDetailScreen(
                             AnnotatedString(section)
                         },
                         style = MaterialTheme.typography.bodyLarge.copy(
-                            fontSize = 18.sp,
-                            lineHeight = 32.sp,
+                            fontSize = bodyFontSize,
+                            lineHeight = bodyLineHeight,
                             color = MaterialTheme.colorScheme.onBackground,
                             textIndent = indent,
                         ),
@@ -311,15 +345,16 @@ fun ArticleDetailScreen(
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = "作品简介",
-                        fontSize = 17.sp,
+                        fontSize = bodyFontSize,
+                        lineHeight = bodyLineHeight,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         text = article.appreciation,
-                        fontSize = 15.sp,
-                        lineHeight = 26.sp,
+                        fontSize = bodyFontSize,
+                        lineHeight = bodyLineHeight,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -328,57 +363,38 @@ fun ArticleDetailScreen(
             }
         }
 
-        Box(
+        // 固定顶栏：正文上滑后标题淡入，形成大标题推入标题栏的效果
+        Row(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
+                .align(Alignment.TopCenter)
+                .widthIn(max = 760.dp)
                 .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.background,
-                        ),
-                    )
-                )
-                .navigationBarsPadding()
-                .padding(top = 24.dp, bottom = 18.dp),
-            contentAlignment = Alignment.Center,
+                .background(MaterialTheme.colorScheme.background)
+                .statusBarsPadding()
+                .height(56.dp)
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(
-                shape = RectangleShape,
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
-                shadowElevation = 8.dp,
-            ) {
-                Row(
-                    modifier = Modifier.padding(6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    ActionToggle(
-                        label = "注释",
-                        icon = Icons.Rounded.Notes,
-                        active = notesOn,
-                        onClick = { notesOn = !notesOn },
-                    )
-                    if (experimental) {
-                        ActionToggle(
-                            label = "朗读",
-                            icon = Icons.Rounded.VolumeUp,
-                            active = audioPlaying,
-                            onClick = toggleAudio,
-                        )
-                    }
-                    ActionToggle(
-                        label = "翻译",
-                        icon = Icons.Rounded.Translate,
-                        active = translationOn,
-                        onClick = { translationOn = !translationOn },
-                    )
-                }
-            }
+            MochiGlassIconButton(
+                icon = Icons.Rounded.ArrowBack,
+                contentDescription = "返回",
+                onClick = onBack,
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = article.title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = compactTitleAlpha),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+    }
         }
     }
-    } }
 }
 
 /**
@@ -435,13 +451,11 @@ private fun LandscapeArticleDetail(
                 modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.Rounded.ArrowBack,
-                        contentDescription = "返回",
-                        tint = MaterialTheme.colorScheme.onBackground,
-                    )
-                }
+                MochiGlassIconButton(
+                    icon = Icons.Rounded.ArrowBack,
+                    contentDescription = "返回",
+                    onClick = onBack,
+                )
                 Text(
                     text = article.title,
                     fontSize = 17.sp,
@@ -671,36 +685,138 @@ private fun GrayCard(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
+/** 正文底部：左侧独立朗读工具栏，右侧「显示」弹出层入口。 */
 @Composable
-private fun ActionToggle(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    active: Boolean,
-    onClick: () -> Unit,
+private fun ArticleBottomControls(
+    modifier: Modifier,
+    experimental: Boolean,
+    audioPlaying: Boolean,
+    onToggleAudio: () -> Unit,
+    translationOn: Boolean,
+    notesOn: Boolean,
+    onTranslationChange: (Boolean) -> Unit,
+    onNotesChange: (Boolean) -> Unit,
+    zoomPercent: Int,
+    onZoomPercentChange: (Int) -> Unit,
 ) {
-    val foreground = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    Surface(
-        onClick = onClick,
-        shape = RectangleShape,
-        color = if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else Color.Transparent,
-        contentColor = foreground,
+    var panelExpanded by remember { mutableStateOf(false) }
+
+    MochiBottomToolbar(
+        modifier = modifier,
+        edgeColor = MaterialTheme.colorScheme.background,
     ) {
-        Row(
-            modifier = Modifier
-                .defaultMinSize(minWidth = 72.dp, minHeight = 44.dp)
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = foreground,
-                modifier = Modifier.size(19.dp),
-            )
-            Spacer(Modifier.size(5.dp))
-            Text(text = label, color = foreground, fontSize = 15.sp)
+        if (experimental) {
+            MochiBarGroup {
+                MochiBarIconButton(onClick = onToggleAudio) {
+                    Icon(
+                        imageVector = Icons.Rounded.VolumeUp,
+                        contentDescription = if (audioPlaying) "停止朗读" else "朗读",
+                        tint = if (audioPlaying) {
+                            MochiTheme.colorScheme.primary
+                        } else {
+                            MochiTheme.colorScheme.onSurface
+                        },
+                    )
+                }
+            }
         }
+        Spacer(Modifier.weight(1f))
+        MochiPopoverButton(
+            expanded = panelExpanded,
+            onExpandedChange = { panelExpanded = it },
+            width = 240.dp,
+            popover = {
+                DisplayPanel(
+                    translationOn = translationOn,
+                    notesOn = notesOn,
+                    onTranslationChange = onTranslationChange,
+                    onNotesChange = onNotesChange,
+                    zoomPercent = zoomPercent,
+                    onZoomPercentChange = onZoomPercentChange,
+                )
+            },
+            buttonContent = {
+                Text("显示", style = MochiTheme.textStyles.body)
+            },
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.DisplayPanel(
+    translationOn: Boolean,
+    notesOn: Boolean,
+    onTranslationChange: (Boolean) -> Unit,
+    onNotesChange: (Boolean) -> Unit,
+    zoomPercent: Int,
+    onZoomPercentChange: (Int) -> Unit,
+) {
+    DisplayCheckRow(
+        label = "翻译",
+        checked = translationOn,
+        onCheckedChange = onTranslationChange,
+    )
+    DisplayCheckRow(
+        label = "注释",
+        checked = notesOn,
+        onCheckedChange = onNotesChange,
+    )
+    Spacer(Modifier.height(6.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "字号",
+            style = MochiTheme.textStyles.body,
+            color = MochiTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        MochiIconButton(
+            onClick = { onZoomPercentChange((zoomPercent - 5).coerceAtLeast(100)) },
+            enabled = zoomPercent > 100,
+            style = MochiButtonStyle.Tonal,
+            size = 34.dp,
+        ) {
+            Icon(Icons.Rounded.TextDecrease, contentDescription = "缩小字号")
+        }
+        Text(
+            text = "$zoomPercent%",
+            style = MochiTheme.textStyles.footnote,
+            color = MochiTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        )
+        MochiIconButton(
+            onClick = { onZoomPercentChange((zoomPercent + 5).coerceAtMost(125)) },
+            enabled = zoomPercent < 125,
+            style = MochiButtonStyle.Tonal,
+            size = 34.dp,
+        ) {
+            Icon(Icons.Rounded.TextIncrease, contentDescription = "放大字号")
+        }
+    }
+}
+
+@Composable
+private fun DisplayCheckRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MochiTheme.textStyles.body,
+            color = MochiTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        MochiCheckbox(checked = checked, onCheckedChange = null)
     }
 }
 

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -148,13 +149,12 @@ private fun AuthorTopBar(
             .padding(start = 4.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.Rounded.ArrowBack,
-                contentDescription = "返回",
-                tint = MaterialTheme.colorScheme.onBackground,
-            )
-        }
+        MochiGlassIconButton(
+            icon = Icons.Rounded.ArrowBack,
+            contentDescription = "返回",
+            onClick = onBack,
+        )
+        Spacer(Modifier.width(8.dp))
         Text(
             text = title,
             modifier = Modifier.weight(1f),
@@ -164,13 +164,11 @@ private fun AuthorTopBar(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Box {
-            IconButton(onClick = { menuOpen = true }) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "更多",
-                    tint = MaterialTheme.colorScheme.onBackground,
-                )
-            }
+            MochiGlassIconButton(
+                icon = Icons.Rounded.MoreVert,
+                contentDescription = "更多",
+                onClick = { menuOpen = true },
+            )
             DropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },

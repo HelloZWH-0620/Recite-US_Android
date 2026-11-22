@@ -159,13 +159,13 @@ private fun BeishuwaApp() {
 
     // 手机：主界面锁定竖屏，文章/作者页默认竖屏并支持旋转。
     // 平板：仍由实验性功能开关控制是否允许横竖屏切换。
-    val experimental by SettingsRepository.experimental
+    val tabletRotation by SettingsRepository.tabletRotation
     val activity = LocalContext.current as? android.app.Activity
     val isPhone = LocalConfiguration.current.smallestScreenWidthDp < 600
     val atHome = stack.lastOrNull() is Screen.Home
-    DisposableEffect(experimental, isPhone, atHome) {
+    DisposableEffect(tabletRotation, isPhone, atHome) {
         activity?.requestedOrientation = when {
-            !isPhone -> if (experimental) {
+            !isPhone -> if (tabletRotation) {
                 android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
             } else {
                 android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT

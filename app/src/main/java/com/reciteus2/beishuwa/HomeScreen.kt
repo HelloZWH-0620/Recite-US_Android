@@ -2,14 +2,19 @@ package com.reciteus2.beishuwa
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -24,8 +29,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,6 +46,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
@@ -46,10 +54,6 @@ import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -67,6 +71,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -74,13 +79,26 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.CompositionLocalProvider
+import kotlinx.collections.immutable.persistentListOf
+import ui.feice.mochi.effect.glass.LocalMochiBackdrop
+import ui.feice.mochi.effect.glass.mochiBackdropSource
+import ui.feice.mochi.effect.glass.rememberMochiBackdrop
+import ui.feice.mochi.basic.MochiSearchBar
+import ui.feice.mochi.basic.MochiSegmentedControl
+import ui.feice.mochi.basic.MochiTabBar
+import ui.feice.mochi.basic.MochiTabBarDefaults
+import ui.feice.mochi.basic.MochiTabItem
+import ui.feice.mochi.theme.MochiTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -96,6 +114,7 @@ fun HomeScreen(
     var subTab by rememberSaveable { mutableIntStateOf(0) }
     var wordTab by rememberSaveable { mutableIntStateOf(1) }
     var query by rememberSaveable { mutableStateOf("") }
+    var searchActive by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val shiCiWords = remember { WordRepository.load(context, "shici.json") }
     val xuCiWords = remember { WordRepository.load(context, "words.json") }
@@ -106,7 +125,10 @@ fun HomeScreen(
     val focusManager = LocalFocusManager.current
     val imeVisible = WindowInsets.isImeVisible
     LaunchedEffect(imeVisible) {
-        if (!imeVisible) focusManager.clearFocus()
+        if (!imeVisible) {
+            focusManager.clearFocus()
+            searchActive = false
+        }
     }
 
     if (isLandscape) {
@@ -118,6 +140,8 @@ fun HomeScreen(
             subTab = subTab,
             wordTab = wordTab,
             query = query,
+            searchActive = searchActive,
+            onSearchActiveChange = { searchActive = it },
             onRootTabChange = { rootTab = it },
             onSubTabChange = { subTab = it },
             onWordTabChange = { wordTab = it },
@@ -134,6 +158,8 @@ fun HomeScreen(
             subTab = subTab,
             wordTab = wordTab,
             query = query,
+            searchActive = searchActive,
+            onSearchActiveChange = { searchActive = it },
             onRootTabChange = { rootTab = it },
             onSubTabChange = { subTab = it },
             onWordTabChange = { wordTab = it },
@@ -153,6 +179,8 @@ private fun PortraitHome(
     subTab: Int,
     wordTab: Int,
     query: String,
+    searchActive: Boolean,
+    onSearchActiveChange: (Boolean) -> Unit,
     onRootTabChange: (Int) -> Unit,
     onSubTabChange: (Int) -> Unit,
     onWordTabChange: (Int) -> Unit,
@@ -160,38 +188,42 @@ private fun PortraitHome(
     onOpenArticle: (Article) -> Unit,
     onOpenAuthor: (Author) -> Unit,
 ) {
+    val backdrop = rememberMochiBackdrop()
+    CompositionLocalProvider(LocalMochiBackdrop provides backdrop) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 3.dp,
-            ) {
-                NavigationBarItem(
-                    selected = rootTab == 0,
-                    onClick = { onRootTabChange(0) },
-                    icon = { Icon(Icons.Rounded.MenuBook, contentDescription = null) },
-                    label = { Text("背书") },
-                )
-                NavigationBarItem(
-                    selected = rootTab == 1,
-                    onClick = { onRootTabChange(1) },
-                    icon = { Icon(Icons.Rounded.TextFields, contentDescription = null) },
-                    label = { Text("字词") },
-                )
-                NavigationBarItem(
-                    selected = rootTab == 2,
-                    onClick = { onRootTabChange(2) },
-                    icon = { Icon(Icons.Rounded.Person, contentDescription = null) },
-                    label = { Text("我的") },
-                )
-            }
+            MochiTabBar(
+                selectedIndex = rootTab,
+                onSelect = onRootTabChange,
+                items = persistentListOf(
+                    MochiTabItem(
+                        label = "背书",
+                        icon = { tint -> Icon(Icons.Rounded.MenuBook, contentDescription = null, tint = tint) },
+                    ),
+                    MochiTabItem(
+                        label = "字词",
+                        icon = { tint -> Icon(Icons.Rounded.TextFields, contentDescription = null, tint = tint) },
+                    ),
+                    MochiTabItem(
+                        label = "练习",
+                        icon = { tint -> Icon(Icons.Rounded.EditNote, contentDescription = null, tint = tint) },
+                    ),
+                    MochiTabItem(
+                        label = "我的",
+                        icon = { tint -> Icon(Icons.Rounded.Person, contentDescription = null, tint = tint) },
+                    ),
+                ),
+                behavior = MochiTabBarDefaults.behavior(
+                    height = 56.dp,
+                    itemWidth = 76.dp,
+                ),
+            )
         },
-    ) { innerPadding ->
+    ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter,
         ) {
             Column(
@@ -202,39 +234,114 @@ private fun PortraitHome(
                     .fillMaxHeight(),
             ) {
                 if (rootTab == 0) {
-                    CenteredTabs(
-                        selected = subTab,
-                        onSelect = onSubTabChange,
-                    )
-                    SearchField(
-                        query = query,
-                        placeholder = if (subTab == 0) "搜索篇目" else "搜索作者",
-                        onQueryChange = onQueryChange,
-                        suggestions = searchSuggestions(data, query.trim(), subTab),
-                        onSuggestionClick = { suggestion ->
-                            onQueryChange("")
-                            when {
-                                suggestion.article != null -> onOpenArticle(suggestion.article)
-                                suggestion.author != null -> onOpenAuthor(suggestion.author)
+                    val focus = LocalFocusManager.current
+                    val keyboard = LocalSoftwareKeyboardController.current
+                    val deactivate = {
+                        focus.clearFocus()
+                        keyboard?.hide()
+                        onSearchActiveChange(false)
+                    }
+                    val density = LocalDensity.current
+                    var headerHeight by remember { mutableStateOf(0.dp) }
+                    Box(Modifier.fillMaxSize()) {
+                        // 目录：作为玻璃取样来源，内容从悬浮栏与导航栏下方滚过
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .mochiBackdropSource(backdrop)
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false)
+                                        waitForUpOrCancellation()
+                                        deactivate()
+                                    }
+                                },
+                        ) {
+                            if (subTab == 0) {
+                                ArticlePane(
+                                    data = data,
+                                    query = query,
+                                    onOpenArticle = onOpenArticle,
+                                    topPadding = headerHeight,
+                                    bottomPadding = 96.dp,
+                                )
+                            } else {
+                                AuthorPane(
+                                    data = data,
+                                    query = query,
+                                    onOpenAuthor = onOpenAuthor,
+                                    topPadding = headerHeight,
+                                    bottomPadding = 96.dp,
+                                )
                             }
-                        },
-                    )
-                    if (subTab == 0) {
-                        ArticlePane(data = data, query = query, onOpenArticle = onOpenArticle)
-                    } else {
-                        AuthorPane(data = data, query = query, onOpenAuthor = onOpenAuthor)
+                        }
+                        // 顶栏：背景覆盖到状态栏区域，内容整体避让安全区
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onSizeChanged {
+                                    headerHeight = with(density) { it.height.toDp() }
+                                }
+                                .background(MaterialTheme.colorScheme.background)
+                                .statusBarsPadding(),
+                        ) {
+                            AnimatedVisibility(
+                                visible = !searchActive,
+                                enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+                                exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+                            ) {
+                                CenteredTabs(
+                                    selected = subTab,
+                                    onSelect = onSubTabChange,
+                                )
+                            }
+                            SearchField(
+                                query = query,
+                                placeholder = if (subTab == 0) "搜索篇目" else "搜索作者",
+                                onQueryChange = onQueryChange,
+                                onActivate = { onSearchActiveChange(true) },
+                                onCancel = {
+                                    onQueryChange("")
+                                    deactivate()
+                                },
+                            )
+                        }
                     }
                 } else if (rootTab == 1) {
-                    WordPane(
-                        words = if (wordTab == 0) shiCiWords else xuCiWords,
-                        selectedTab = wordTab,
-                        onSelectTab = onWordTabChange,
-                    )
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .mochiBackdropSource(backdrop),
+                    ) {
+                        WordPane(
+                            words = if (wordTab == 0) shiCiWords else xuCiWords,
+                            selectedTab = wordTab,
+                            onSelectTab = onWordTabChange,
+                        )
+                    }
+                } else if (rootTab == 2) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .mochiBackdropSource(backdrop),
+                    ) {
+                        PracticePane(data = data)
+                    }
                 } else {
-                    ProfileScreen()
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .mochiBackdropSource(backdrop),
+                    ) {
+                        ProfileScreen()
+                    }
                 }
             }
         }
+    }
     }
 }
 
@@ -247,6 +354,8 @@ private fun LandscapeHome(
     subTab: Int,
     wordTab: Int,
     query: String,
+    searchActive: Boolean,
+    onSearchActiveChange: (Boolean) -> Unit,
     onRootTabChange: (Int) -> Unit,
     onSubTabChange: (Int) -> Unit,
     onWordTabChange: (Int) -> Unit,
@@ -254,7 +363,6 @@ private fun LandscapeHome(
     onOpenArticle: (Article) -> Unit,
     onOpenAuthor: (Author) -> Unit,
 ) {
-    val suggestions = searchSuggestions(data, query.trim(), subTab)
     val isTablet = LocalConfiguration.current.smallestScreenWidthDp >= 600
     val searchWidth = minOf(
         (LocalConfiguration.current.screenWidthDp.dp - 32.dp) / when {
@@ -273,30 +381,70 @@ private fun LandscapeHome(
         ) {
             Column(Modifier.fillMaxSize()) {
                 if (rootTab == 0) {
+                    val focus = LocalFocusManager.current
+                    val keyboard = LocalSoftwareKeyboardController.current
+                    val deactivate = {
+                        focus.clearFocus()
+                        keyboard?.hide()
+                        onSearchActiveChange(false)
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, top = 2.dp),
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // 左上角：文章 / 作者
-                        TabItem("文章", subTab == 0) { onSubTabChange(0) }
-                        TabItem("作者", subTab == 1) { onSubTabChange(1) }
+                        AnimatedVisibility(
+                            visible = !searchActive,
+                            enter = expandHorizontally(expandFrom = Alignment.Start) + fadeIn(),
+                            exit = shrinkHorizontally(shrinkTowards = Alignment.Start) + fadeOut(),
+                        ) {
+                            // 左上角：文章 / 作者
+                            MochiSegmentedControl(
+                                selectedIndex = subTab,
+                                onSelect = onSubTabChange,
+                                items = persistentListOf("文章", "作者"),
+                            )
+                        }
 
                         Spacer(Modifier.weight(1f))
 
-                        // 右上角：搜索框
-                        LandscapeSearchField(
+                        // 右上角：搜索栏
+                        MochiSearchBar(
                             query = query,
-                            placeholder = if (subTab == 0) "搜索篇目" else "搜索作者",
                             onQueryChange = onQueryChange,
-                            modifier = Modifier.width(searchWidth),
+                            modifier = Modifier
+                                .width(searchWidth)
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false)
+                                        onSearchActiveChange(true)
+                                    }
+                                },
+                            placeholder = if (subTab == 0) "搜索篇目" else "搜索作者",
+                            onCancel = {
+                                onQueryChange("")
+                                deactivate()
+                            },
                         )
                     }
-                    if (subTab == 0) {
-                        LandscapeArticlePane(data = data, query = query, onOpenArticle = onOpenArticle)
-                    } else {
-                        LandscapeAuthorPane(data = data, query = query, onOpenAuthor = onOpenAuthor)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    waitForUpOrCancellation()
+                                    deactivate()
+                                }
+                            },
+                    ) {
+                        if (subTab == 0) {
+                            LandscapeArticlePane(data = data, query = query, onOpenArticle = onOpenArticle)
+                        } else {
+                            LandscapeAuthorPane(data = data, query = query, onOpenAuthor = onOpenAuthor)
+                        }
                     }
                 } else if (rootTab == 1) {
                     WordPane(
@@ -305,29 +453,14 @@ private fun LandscapeHome(
                         onSelectTab = onWordTabChange,
                         landscape = true,
                     )
+                } else if (rootTab == 2) {
+                    PracticePane(data = data, landscape = true)
                 } else {
                     ProfileScreen()
                 }
             }
 
             // 搜索建议浮层：覆盖正文，避免撑开顶部栏
-            if (rootTab == 0 && suggestions.isNotEmpty()) {
-                SuggestionPanel(
-                    suggestions = suggestions,
-                    onSuggestionClick = { suggestion ->
-                        onQueryChange("")
-                        when {
-                            suggestion.article != null -> onOpenArticle(suggestion.article)
-                            suggestion.author != null -> onOpenAuthor(suggestion.author)
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 72.dp, end = 16.dp)
-                        .width(searchWidth),
-                )
-            }
-
             // 右下角：悬浮胶囊导航
             FloatingCapsule(
                 selected = rootTab,
@@ -362,19 +495,25 @@ private fun WordPane(
                     .padding(start = 16.dp, top = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TabItem("实词", selectedTab == 0) { onSelectTab(0) }
-                TabItem("虚词", selectedTab == 1) { onSelectTab(1) }
+                MochiSegmentedControl(
+                    selectedIndex = selectedTab,
+                    onSelect = onSelectTab,
+                    items = persistentListOf("实词", "虚词"),
+                )
             }
         } else {
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp),
-                horizontalArrangement = Arrangement.Center,
+                    .padding(top = 8.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                TabItem("实词", selectedTab == 0) { onSelectTab(0) }
-                Spacer(Modifier.width(8.dp))
-                TabItem("虚词", selectedTab == 1) { onSelectTab(1) }
+                MochiSegmentedControl(
+                    selectedIndex = selectedTab,
+                    onSelect = onSelectTab,
+                    items = persistentListOf("实词", "虚词"),
+                    modifier = Modifier.width(220.dp),
+                )
             }
         }
 
@@ -405,7 +544,7 @@ private fun WordPane(
 
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 itemsIndexed(words) { _, word ->
@@ -490,7 +629,8 @@ private fun FloatingCapsule(
         ) {
             CapsuleItem(Icons.Rounded.MenuBook, "背书", selected == 0) { onSelect(0) }
             CapsuleItem(Icons.Rounded.TextFields, "字词", selected == 1) { onSelect(1) }
-            CapsuleItem(Icons.Rounded.Person, "我的", selected == 2) { onSelect(2) }
+            CapsuleItem(Icons.Rounded.EditNote, "练习", selected == 2) { onSelect(2) }
+            CapsuleItem(Icons.Rounded.Person, "我的", selected == 3) { onSelect(3) }
         }
     }
 }
@@ -530,70 +670,18 @@ private fun CapsuleItem(icon: ImageVector, label: String, selected: Boolean, onC
 
 @Composable
 private fun CenteredTabs(selected: Int, onSelect: (Int) -> Unit) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 6.dp),
-        horizontalArrangement = Arrangement.Center,
+            .padding(top = 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        TabItem("文章", selected == 0) { onSelect(0) }
-        Spacer(Modifier.width(8.dp))
-        TabItem("作者", selected == 1) { onSelect(1) }
-    }
-}
-
-@Composable
-private fun TabItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    Column(
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = label,
-            color = color,
-            fontSize = 17.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        MochiSegmentedControl(
+            selectedIndex = selected,
+            onSelect = onSelect,
+            items = persistentListOf("文章", "作者"),
+            modifier = Modifier.width(220.dp),
         )
-        Spacer(Modifier.height(6.dp))
-        Box(
-            modifier = Modifier
-                .width(28.dp)
-                .height(3.dp)
-                .background(
-                    color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    shape = RectangleShape,
-                ),
-        )
-    }
-}
-
-private data class SearchSuggestion(
-    val title: String,
-    val subtitle: String,
-    val article: Article? = null,
-    val author: Author? = null,
-)
-
-private fun searchSuggestions(
-    data: ReciteData,
-    query: String,
-    subTab: Int,
-): List<SearchSuggestion> {
-    if (query.isEmpty()) return emptyList()
-    return if (subTab == 0) {
-        data.articles
-            .filter { it.title.contains(query, ignoreCase = true) || it.author.contains(query, ignoreCase = true) }
-            .take(6)
-            .map { SearchSuggestion(it.title, it.author, article = it) }
-    } else {
-        data.authors
-            .filter { !it.name.startsWith("《") }
-            .filter { it.name.contains(query, ignoreCase = true) }
-            .take(6)
-            .map { SearchSuggestion(it.name, it.dynasty, author = it) }
     }
 }
 
@@ -602,159 +690,35 @@ private fun SearchField(
     query: String,
     placeholder: String,
     onQueryChange: (String) -> Unit,
-    suggestions: List<SearchSuggestion>,
-    onSuggestionClick: (SearchSuggestion) -> Unit,
+    onActivate: () -> Unit,
+    onCancel: () -> Unit,
 ) {
-    Column(
+    MochiSearchBar(
+        query = query,
+        onQueryChange = onQueryChange,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text(placeholder, fontSize = 15.sp) },
-            leadingIcon = {
-                Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            },
-            trailingIcon = {
-                if (query.isNotEmpty()) {
-                    IconButton(onClick = { onQueryChange("") }) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = "清空搜索",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    onActivate()
                 }
             },
-            singleLine = true,
-            shape = RectangleShape,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = Color.Transparent,
-                cursorColor = MaterialTheme.colorScheme.primary,
-            ),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
-        )
-
-        if (suggestions.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            SuggestionPanel(
-                suggestions = suggestions,
-                onSuggestionClick = onSuggestionClick,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
-@Composable
-private fun SuggestionPanel(
-    suggestions: List<SearchSuggestion>,
-    onSuggestionClick: (SearchSuggestion) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        shape = RectangleShape,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 4.dp,
-        shadowElevation = 4.dp,
-        modifier = modifier,
-    ) {
-        Column {
-            suggestions.forEachIndexed { index, suggestion ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSuggestionClick(suggestion) }
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = suggestion.title,
-                            fontSize = 15.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = suggestion.subtitle,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.Rounded.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    )
-                }
-                if (index < suggestions.lastIndex) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp)
-                            .height(1.dp)
-                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LandscapeSearchField(
-    query: String,
-    placeholder: String,
-    onQueryChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = modifier,
-        placeholder = { Text(placeholder, fontSize = 14.sp) },
-        leadingIcon = {
-            Icon(
-                Icons.Rounded.Search,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(
-                        Icons.Rounded.Close,
-                        contentDescription = "清空搜索",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        },
-        singleLine = true,
-        shape = RectangleShape,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = Color.Transparent,
-            cursorColor = MaterialTheme.colorScheme.primary,
-        ),
-        textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
+        placeholder = placeholder,
+        onCancel = onCancel,
     )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ArticlePane(data: ReciteData, query: String, onOpenArticle: (Article) -> Unit) {
+private fun ArticlePane(
+    data: ReciteData,
+    query: String,
+    onOpenArticle: (Article) -> Unit,
+    topPadding: Dp = 0.dp,
+    bottomPadding: Dp = 0.dp,
+) {
     val trimmed = query.trim()
     val filtered = remember(data, trimmed) {
         data.articles.filter {
@@ -776,10 +740,10 @@ private fun ArticlePane(data: ReciteData, query: String, onOpenArticle: (Article
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = PaddingValues(top = topPadding, bottom = bottomPadding + 24.dp),
     ) {
         groups.forEach { (label, list) ->
-            stickyHeader(key = "header_$label") {
+            item(key = "header_$label") {
                 SectionHeader(label)
             }
             items(list, key = { it.id }) { article ->
@@ -791,37 +755,35 @@ private fun ArticlePane(data: ReciteData, query: String, onOpenArticle: (Article
 
 @Composable
 private fun SectionHeader(label: String) {
-    Row(
+    // 按 mochi 分组小标题规范：与行文字左边距 16dp 对齐，字号同正文、半粗，下方留 10dp
+    Text(
+        text = label,
+        style = MochiTheme.textStyles.navTitle,
+        color = MaterialTheme.colorScheme.primary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
-            .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .height(16.dp)
-                .background(MaterialTheme.colorScheme.primary, RectangleShape),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-            letterSpacing = 1.sp,
-        )
-    }
+            .padding(horizontal = 16.dp)
+            .padding(top = 6.dp, bottom = 10.dp),
+    )
 }
 
 @Composable
 private fun ArticleRow(article: Article, onClick: () -> Unit) {
-    Surface(onClick = onClick, color = Color.Transparent) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = MochiTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 13.dp),
+                .padding(horizontal = 14.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -1138,7 +1100,13 @@ private fun LandscapeAuthorPane(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AuthorPane(data: ReciteData, query: String, onOpenAuthor: (Author) -> Unit) {
+private fun AuthorPane(
+    data: ReciteData,
+    query: String,
+    onOpenAuthor: (Author) -> Unit,
+    topPadding: Dp = 0.dp,
+    bottomPadding: Dp = 0.dp,
+) {
     val trimmed = query.trim()
     val sections = remember(data, trimmed) {
         ReciteData.DYNASTY_ORDER.mapNotNull { dynasty ->
@@ -1203,8 +1171,8 @@ private fun AuthorPane(data: ReciteData, query: String, onOpenAuthor: (Author) -
             modifier = Modifier
                 .width(92.dp)
                 .fillMaxHeight()
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
-            contentPadding = PaddingValues(vertical = 4.dp),
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)),
+            contentPadding = PaddingValues(top = topPadding + 4.dp, bottom = bottomPadding + 4.dp),
         ) {
             itemsIndexed(ReciteData.DYNASTY_ORDER) { index, dynasty ->
                 DynastyNavItem(
@@ -1236,10 +1204,15 @@ private fun AuthorPane(data: ReciteData, query: String, onOpenAuthor: (Author) -
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
-            contentPadding = PaddingValues(start = 10.dp, end = 14.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(
+                start = 10.dp,
+                end = 14.dp,
+                top = topPadding,
+                bottom = bottomPadding + 24.dp,
+            ),
         ) {
             sections.forEach { section ->
-                stickyHeader(key = "authors_${section.dynasty}") {
+                item(key = "authors_${section.dynasty}") {
                     SectionHeader(section.dynasty)
                 }
                 items(section.authors, key = { it.id }) { author ->
@@ -1298,11 +1271,11 @@ private fun DynastyNavItem(
 private fun AuthorRow(author: Author, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        shape = RectangleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MochiTheme.shapes.large,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
     ) {
         Row(
             modifier = Modifier

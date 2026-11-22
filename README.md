@@ -2,13 +2,13 @@
 
 <div align="center">
 
-# <img src="app/src/main/icon/ReciteUS.ico" height="28" width="28"/> 背书哇（Android）
+# <img src="app/src/main/icon/ReciteUS2.png" height="28" width="28"/> 背书哇（Android）
 
 [![Stars](https://img.shields.io/github/stars/HelloZWH-0620/Recite-US_Android?label=Stars)](https://github.com/HelloZWH-0620/Recite-US_Android)
-[![版本](https://img.shields.io/badge/版本-v1.0.0_Beta-orange?style=flat-square)](https://github.com/HelloZWH-0620/Recite-US_Android/releases)
-![Android 版本](https://img.shields.io/badge/Android-16-3ddc84?style=flat-square&logo=android)
+[![版本](https://img.shields.io/badge/版本-v1.6.6111-orange?style=flat-square)](https://github.com/HelloZWH-0620/Recite-US_Android/releases)
+![Android 版本](https://img.shields.io/badge/Android-8.0%2B-3ddc84?style=flat-square&logo=android)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7f52ff?style=flat-square&logo=kotlin)
-![Material 3](https://img.shields.io/badge/设计规范-Material_3-0052cc?style=flat-square)
+![设计规范](https://img.shields.io/badge/设计规范-Mochi_%2B_Material_3-0052cc?style=flat-square)
 
 
 背书哇 是一款帮助背诵文言文与古诗词的 Android 应用。<br/>
@@ -27,6 +27,7 @@
 - [x] 一键查看作者资料
 - [x] 可开启译文、注释，注释词句在正文中同步高亮
 - [x] 横屏左右分屏：左侧正文、右侧赏析 / 注释 / 翻译，逐段对齐同步滚动
+- [x] 手机竖屏单列、平板按屏宽自适应多列排布
 
 ### 字词
 
@@ -44,16 +45,24 @@
 - [x] 朝代导航，快速检索
 - [x] 作者详情基于内嵌 WebView + Markdown 渲染器
 
+### 外观与字体
+
+- [x] 基于 mochi-compose 的 MD3 Expressive 视觉规范：连续曲率圆角、胶囊底部标签栏、分段控件与开关
+- [x] 浅色模式天蓝主题、深色模式金黄主题，均由种子色动态生成
+- [x] 字体设置：系统默认字体 / 自定义字体，字号 85%–160% 调节
+- [x] 双指缩放调整字号，实时悬浮提示当前大小，缩放期间不会同时滚动
+
 ### 其它功能
 
 - [x] 预测性返回手势跟手动画（Android 16+）
+- [x] 手机主页锁定竖屏、文章页支持横屏，平板自适应并避让安全区
 
 ## 开始使用
 
 **首先，请确保您的设备满足以下要求：**
 
-- Android 16.0或更高版本
-- Harmony OS 3.0或更高版本
+- Android 8.0（API 26）或更高版本的手机 / 平板
+- 推荐 Android 12 及以上以获得完整的原生媒体通知体验
 
 可以在以下渠道下载到本应用：
 
@@ -70,7 +79,7 @@
 
 ## 开发
 
-本项目使用 Kotlin + Jetpack Compose（Material 3）开发，minSdk 26、targetSdk 36。
+本项目使用 Kotlin + Jetpack Compose 开发，界面同时使用 Material 3 与 [mochi-compose](https://github.com/feice11/mochi-compose) 设计系统，minSdk 26、targetSdk 36。
 
 在本地编译应用：
 
@@ -92,9 +101,13 @@
 
 本项目使用了 [Kotlin](https://kotlinlang.org/)、[Jetpack Compose](https://developer.android.com/compose)、[Coil](https://coil-kt.github.io/coil/)、[Jsoup](https://jsoup.org/) 等开源库与框架。
 
+界面样式接入 [mochi-compose](https://github.com/feice11/mochi-compose)（Apache License 2.0，Copyright 2026 mochi-compose contributors），其配色、字阶、圆角、标签栏、分段控件与开关均来自该设计系统。相关版权与许可说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
 ## 许可证
 
 本项目基于 [GNU General Public License v3.0](LICENSE.txt) 获得许可。
+
+第三方组件遵循各自许可协议，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 <div align="center">
 

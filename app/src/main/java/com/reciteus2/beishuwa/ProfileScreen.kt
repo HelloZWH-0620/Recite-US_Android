@@ -20,12 +20,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Science
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -34,8 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,8 +52,17 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import ui.feice.mochi.basic.MochiButton
+import ui.feice.mochi.basic.MochiSheet
+import ui.feice.mochi.basic.MochiSwitch
+import ui.feice.mochi.basic.MochiTextField
+import ui.feice.mochi.basic.rememberMochiSheetState
+import ui.feice.mochi.theme.MochiTheme
 import kotlinx.coroutines.launch
 
 @Composable
@@ -63,9 +73,16 @@ fun ProfileScreen() {
     var showDialog by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     val experimental by remember { SettingsRepository.experimental }
+    val tabletRotation by remember { SettingsRepository.tabletRotation }
+    val useAaasSpec by remember { SettingsRepository.useAaasSpec }
+    var showExperimentalPanel by remember { mutableStateOf(false) }
     val customFont by remember { SettingsRepository.useCustomFont }
     val fontScale by remember { SettingsRepository.fontScale }
     val pinchZoom by remember { SettingsRepository.pinchZoomEnabled }
+    val advancedSheet = rememberMochiSheetState()
+    val aiModel by remember { SettingsRepository.aiModel }
+    val aiBaseUrl by remember { SettingsRepository.aiBaseUrl }
+    val aiApiKey by remember { SettingsRepository.aiApiKey }
 
     Column(
         modifier = Modifier
@@ -74,31 +91,23 @@ fun ProfileScreen() {
             .padding(horizontal = 20.dp),
     ) {
         Text(
-            text = "我的",
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(top = 24.dp, bottom = 24.dp),
-        )
-
-        Text(
             text = "设置",
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = 4.dp, top = 20.dp, bottom = 8.dp),
         )
 
         Surface(
-            shape = RectangleShape,
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 1.dp,
+            shape = MochiTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                        .clickable { showExperimentalPanel = true }
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
@@ -113,12 +122,10 @@ fun ProfileScreen() {
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
                     )
-                    Switch(
-                        checked = experimental,
-                        onCheckedChange = { SettingsRepository.setExperimental(context, it) },
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                        ),
+                    Icon(
+                        imageVector = Icons.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -223,9 +230,8 @@ fun ProfileScreen() {
         )
 
         Surface(
-            shape = RectangleShape,
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 1.dp,
+            shape = MochiTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column {
@@ -372,12 +378,143 @@ fun ProfileScreen() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(
+                    MochiSwitch(
                         checked = pinchZoom,
                         onCheckedChange = { SettingsRepository.setPinchZoom(context, it) },
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                        ),
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Text(
+            text = "AI 相关",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+
+        Surface(
+            shape = MochiTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column {
+                var modelMenuOpen by remember { mutableStateOf(false) }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.padding(horizontal = 7.dp))
+                        Text(
+                            text = "出题模型",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { modelMenuOpen = true }
+                                .background(MaterialTheme.colorScheme.surfaceContainer)
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = aiModelLabel(aiModel),
+                                fontSize = 15.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = modelMenuOpen,
+                            onDismissRequest = { modelMenuOpen = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("DeepSeek V4.1 Flash 1017") },
+                                onClick = {
+                                    SettingsRepository.setAiModel(context, SettingsRepository.AI_MODEL_FLASH)
+                                    modelMenuOpen = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("DeepSeek V4.1 Pro 1017") },
+                                onClick = {
+                                    SettingsRepository.setAiModel(context, SettingsRepository.AI_MODEL_PRO)
+                                    modelMenuOpen = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                AboutDivider()
+
+                Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
+                    Text(
+                        text = "API Key",
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "仅保存在本机，用于调用模型接口。",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    MochiTextField(
+                        value = aiApiKey,
+                        onValueChange = { SettingsRepository.setAiApiKey(context, it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = "sk-…",
+                        secure = true,
+                    )
+                }
+
+                AboutDivider()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { advancedSheet.show() }
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.padding(horizontal = 7.dp))
+                    Text(
+                        text = "高级选项",
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = Icons.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -394,9 +531,8 @@ fun ProfileScreen() {
 
         Surface(
             onClick = { showDialog = true },
-            shape = RectangleShape,
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 1.dp,
+            shape = MochiTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
@@ -430,6 +566,101 @@ fun ProfileScreen() {
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 )
             }
+        }
+        Spacer(Modifier.height(88.dp))
+    }
+
+    if (showExperimentalPanel) {
+        Popup(
+            alignment = Alignment.CenterEnd,
+            onDismissRequest = { showExperimentalPanel = false },
+            properties = PopupProperties(focusable = true),
+        ) {
+            Surface(
+                modifier = Modifier
+                    .padding(12.dp)
+                    .width(300.dp),
+                shape = MochiTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shadowElevation = 16.dp,
+            ) {
+                Column(Modifier.padding(vertical = 8.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "实验性功能",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { showExperimentalPanel = false }) {
+                            Icon(Icons.Rounded.Close, contentDescription = "关闭")
+                        }
+                    }
+                    ExperimentalToggleRow(
+                        title = "音频朗读",
+                        description = "正文页播放音频，并使用媒体通知控制。",
+                        checked = experimental,
+                        onCheckedChange = { SettingsRepository.setExperimental(context, it) },
+                    )
+                    ExperimentalToggleRow(
+                        title = "平板横竖屏切换",
+                        description = "允许平板随设备方向旋转。",
+                        checked = tabletRotation,
+                        onCheckedChange = { SettingsRepository.setTabletRotation(context, it) },
+                    )
+                    ExperimentalToggleRow(
+                        title = "AAAS 题库规范",
+                        description = "按 AAAS 格式出题，默认关闭。",
+                        checked = useAaasSpec,
+                        onCheckedChange = { SettingsRepository.setUseAaasSpec(context, it) },
+                    )
+                }
+            }
+        }
+    }
+
+    MochiSheet(
+        state = advancedSheet,
+        onDismiss = { advancedSheet.hide() },
+    ) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+            Text(
+                text = "高级选项",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "接口地址",
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "OpenAI 兼容接口，默认 DeepSeek。",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            MochiTextField(
+                value = aiBaseUrl,
+                onValueChange = { SettingsRepository.setAiBaseUrl(context, it) },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = SettingsRepository.DEFAULT_AI_BASE_URL,
+            )
+            Spacer(Modifier.height(24.dp))
+            MochiButton(
+                onClick = { advancedSheet.hide() },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("完成")
+            }
+            Spacer(Modifier.height(16.dp))
         }
     }
 
@@ -535,6 +766,42 @@ private fun VerticalDivider() {
             .height(20.dp)
             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
     )
+}
+
+@Composable
+private fun ExperimentalToggleRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = description,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        MochiSwitch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+private fun aiModelLabel(model: String): String = when (model) {
+    SettingsRepository.AI_MODEL_PRO -> "DeepSeek V4.1 Pro 1017"
+    else -> "DeepSeek V4.1 Flash 1017"
 }
 
 @Composable

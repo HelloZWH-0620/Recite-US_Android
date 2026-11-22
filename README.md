@@ -73,7 +73,7 @@
 
 ## 获取帮助＆加入社区
 
-[![加入 QQ 群](https://img.shields.io/badge/QQ_%E4%BA%A4%E6%B5%81%E7%BE%A4-950739151-%230066cc?style=flat-square&logo=TencentQQ)](https://qm.qq.com/cgi-bin/qm/qr?k=群号自行生成)
+[![加入 QQ 群](https://img.shields.io/badge/QQ_%E4%BA%A4%E6%B5%81%E7%BE%A4-950739151-%230066cc?style=flat-square&logo=TencentQQ)](https://qm.qq.com/q/nk8BvTndTy)
 
 如果您确定您遇到的问题是一个 **Bug**，或者您要提出一项**新的功能**，请[提交 Issue](https://github.com/HelloZWH-0620/Recite-US_Android/issues/new)。
 

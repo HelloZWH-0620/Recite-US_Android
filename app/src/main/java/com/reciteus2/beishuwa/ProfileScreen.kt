@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteSweep
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
@@ -97,6 +99,9 @@ fun ProfileScreen() {
     var showAbout by remember { mutableStateOf(false) }
     val experimental by remember { SettingsRepository.experimental }
     val audioEnabled by remember { SettingsRepository.audioEnabled }
+    val audioSource by remember { SettingsRepository.audioSource }
+    var sourceMenuOpen by remember { mutableStateOf(false) }
+    val screenshotFeedback by remember { SettingsRepository.screenshotFeedbackEnabled }
     val tabletRotation by remember { SettingsRepository.tabletRotation }
     val useAaasSpec by remember { SettingsRepository.useAaasSpec }
     var showExperimentalPanel by remember { mutableStateOf(false) }
@@ -186,7 +191,7 @@ fun ProfileScreen() {
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = "背书哇 v1.6.1122",
+                            text = "背书哇 1.6.3123",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -195,6 +200,74 @@ fun ProfileScreen() {
                         imageVector = Icons.Rounded.KeyboardArrowRight,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    )
+                }
+
+                AboutDivider()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { openUrl(context, UPDATE_URL) }
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.SystemUpdate,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.padding(horizontal = 7.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = "检查更新",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "用浏览器打开 GitHub 发布页，查看最新版本。",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    )
+                }
+
+                AboutDivider()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.BugReport,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.padding(horizontal = 7.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = "截图纠错",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "截图后弹出反馈入口，一键加入 QQ 群反馈问题。",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    MochiSwitch(
+                        checked = screenshotFeedback,
+                        onCheckedChange = { SettingsRepository.setScreenshotFeedback(context, it) },
                     )
                 }
             }
@@ -213,7 +286,7 @@ fun ProfileScreen() {
                 ) {
                     AboutRow("软件名称", "背书哇")
                     AboutDivider()
-                    AboutRow("版本号", "v1.6.1122 · 2026-11-22")
+                    AboutRow("版本号", "1.6.3123 · 2026-11-23")
                     AboutDivider()
                     AboutRow("作者", "@喔糖圆鼠")
                     AboutDivider()
@@ -231,9 +304,9 @@ fun ProfileScreen() {
                     AboutDivider()
                     AboutLinkRow(
                         label = "交流群",
-                        value = "950739151",
+                        value = ScreenshotFeedback.QQ_GROUP_NUMBER,
                         onClick = {
-                            clipboardManager.setText(AnnotatedString("950739151"))
+                            clipboardManager.setText(AnnotatedString(ScreenshotFeedback.QQ_GROUP_NUMBER))
                             Toast.makeText(context, "群号已复制到剪贴板", Toast.LENGTH_SHORT).show()
                         },
                     )
@@ -414,7 +487,7 @@ fun ProfileScreen() {
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = "在正文页播放内置音频，并使用媒体通知控制。",
+                            text = "在正文页朗读文章，并按所选音源播放。",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -422,6 +495,101 @@ fun ProfileScreen() {
                     MochiSwitch(
                         checked = audioEnabled,
                         onCheckedChange = { SettingsRepository.setAudioEnabled(context, it) },
+                    )
+                }
+
+                AboutDivider()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.VolumeUp,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.padding(horizontal = 7.dp))
+                        Text(
+                            text = "朗读音源",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    MochiPopoverBox(
+                        expanded = sourceMenuOpen,
+                        onExpandedChange = { sourceMenuOpen = it },
+                        width = 260.dp,
+                        align = MochiAlign.Start,
+                        cover = true,
+                        anchor = {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { sourceMenuOpen = true }
+                                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = audioSourceLabel(audioSource),
+                                    fontSize = 15.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        },
+                        popover = {
+                            ProfileOptionRow(
+                                label = "系统 TTS",
+                                selected = audioSource == SettingsRepository.AUDIO_SOURCE_SYSTEM,
+                                onClick = {
+                                    SettingsRepository.setAudioSource(
+                                        context,
+                                        SettingsRepository.AUDIO_SOURCE_SYSTEM,
+                                    )
+                                    sourceMenuOpen = false
+                                },
+                            )
+                            ProfileOptionRow(
+                                label = "Edge 在线朗读",
+                                selected = audioSource == SettingsRepository.AUDIO_SOURCE_EDGE,
+                                onClick = {
+                                    SettingsRepository.setAudioSource(
+                                        context,
+                                        SettingsRepository.AUDIO_SOURCE_EDGE,
+                                    )
+                                    sourceMenuOpen = false
+                                },
+                            )
+                            ProfileOptionRow(
+                                label = "内置录音",
+                                selected = audioSource == SettingsRepository.AUDIO_SOURCE_MEDIA,
+                                onClick = {
+                                    SettingsRepository.setAudioSource(
+                                        context,
+                                        SettingsRepository.AUDIO_SOURCE_MEDIA,
+                                    )
+                                    sourceMenuOpen = false
+                                },
+                            )
+                        },
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = audioSourceHint(audioSource),
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -815,6 +983,8 @@ fun ProfileScreen() {
     }
 }
 
+private const val UPDATE_URL = "https://github.com/HelloZWH-0620/Recite-US_Android/releases"
+
 private fun openUrl(context: android.content.Context, url: String) {
     runCatching {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -926,6 +1096,18 @@ private fun ExperimentalToggleRow(
 private fun aiModelLabel(model: String): String = when (model) {
     SettingsRepository.AI_MODEL_PRO -> "DeepSeek V4.1 Pro 1017"
     else -> "DeepSeek V4.1 Flash 1017"
+}
+
+private fun audioSourceLabel(source: String): String = when (source) {
+    SettingsRepository.AUDIO_SOURCE_EDGE -> "Edge 在线朗读"
+    SettingsRepository.AUDIO_SOURCE_MEDIA -> "内置录音"
+    else -> "系统 TTS"
+}
+
+private fun audioSourceHint(source: String): String = when (source) {
+    SettingsRepository.AUDIO_SOURCE_EDGE -> "使用微软 Edge 在线合成，音色云健（zh-CN-YunjianNeural），需要联网。"
+    SettingsRepository.AUDIO_SOURCE_MEDIA -> "播放内置真人录音；篇目暂无录音时自动改用 Edge 在线朗读。"
+    else -> "使用设备内置 TTS 引擎逐句朗读，无需联网；媒体卡片会显示当前句子。"
 }
 
 /** 弹出层里的单个选项行：文字 + 选中勾。 */

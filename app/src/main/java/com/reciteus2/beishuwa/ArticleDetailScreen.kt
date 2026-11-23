@@ -112,6 +112,27 @@ private fun audioAssetExists(context: Context, articleId: String): Boolean =
         false
     }
 
+/** 把正文切成适合逐句朗读的短句：按句号、问号、叹号、分号与换行断开 */
+private fun splitSpeechSentences(text: String): List<String> {
+    val result = mutableListOf<String>()
+    val buffer = StringBuilder()
+    fun flush() {
+        val sentence = buffer.toString().trim()
+        if (sentence.isNotEmpty()) result.add(sentence)
+        buffer.clear()
+    }
+    for (ch in text) {
+        if (ch == '\n' || ch == '\r') {
+            flush()
+            continue
+        }
+        buffer.append(ch)
+        if (ch in "。！？；!?;") flush()
+    }
+    flush()
+    return result
+}
+
 @Composable
 fun ArticleDetailScreen(
     article: Article,
@@ -145,18 +166,18 @@ fun ArticleDetailScreen(
     val noteFontSize = (14f * textZoom).sp
     val noteLineHeight = (22f * textZoom).sp
 
-    // 说明：原有一套从未被触发的 TTS 代码（每打开一篇文章都会初始化一个
-    // TextToSpeech 引擎但没有任何入口把 speaking 置为 true）已移除；
-    // 正文朗读后续可通过「朗读」按钮在无音频篇目上作为兜底重新接入。
+    // 说明：朗读统一由 PlaybackService 承担，支持系统 TTS / Edge TTS / 内置录音三种音源。
 
-    // 音频朗读：普通启用项（在「我的」中开关），播放内置音频 + 系统媒体中心控制
+    // 音频朗读：普通启用项（在「我的」中开关），音源与句子切分后交给前台服务
     val audioEnabled = SettingsRepository.audioEnabled.value
+    val audioSource by remember { SettingsRepository.audioSource }
     var audioPlaying by remember { mutableStateOf(false) }
     var audioExpanded by remember { mutableStateOf(false) }
     // 是否已有播放器实例；暂停不销毁，只有自动收起/停止才重置
     var audioStarted by remember { mutableStateOf(false) }
     val audioPlayer = remember { AudioPlayback(context) { audioPlaying = false } }
     val audioAvailable = remember(article.id) { audioAssetExists(context, article.id) }
+    val speechSentences = remember(article) { splitSpeechSentences(article.text) }
     val notifPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
@@ -176,44 +197,39 @@ fun ArticleDetailScreen(
     }
 
     val toggleAudio: () -> Unit = {
-        when {
-            !audioAvailable ->
-                Toast.makeText(context, "正在开发中", Toast.LENGTH_SHORT).show()
-
-            audioStarted -> {
-                // 播放/暂停切换，保留当前进度
-                audioPlayer.toggle()
-                audioPlaying = !audioPlaying
+        if (audioStarted) {
+            // 播放/暂停切换，保留当前进度/当前句
+            audioPlayer.toggle()
+            audioPlaying = !audioPlaying
+        } else {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
-
-            else -> {
-                if (Build.VERSION.SDK_INT >= 33 &&
-                    context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                    != android.content.pm.PackageManager.PERMISSION_GRANTED
-                ) {
-                    notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-                // 音频缺失/损坏时 start() 可能抛异常，避免点击直接崩溃
-                runCatching {
-                    audioPlayer.start("audio/${article.id}.mp3", article.title, article.author)
-                    audioPlaying = true
-                    audioStarted = true
-                }.onFailure {
-                    audioPlaying = false
-                    Toast.makeText(context, "朗读播放失败", Toast.LENGTH_SHORT).show()
-                }
+            // 音频缺失/损坏时 start() 可能抛异常，避免点击直接崩溃
+            runCatching {
+                audioPlayer.start(
+                    assetName = if (audioAvailable) "audio/${article.id}.mp3" else null,
+                    source = audioSource,
+                    sentences = speechSentences,
+                    title = article.title,
+                    author = article.author,
+                )
+                audioPlaying = true
+                audioStarted = true
+            }.onFailure {
+                audioPlaying = false
+                Toast.makeText(context, "朗读播放失败", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     // 底部工具栏：播放/暂停，首次点击展开进度条
     val onToolbarPlayPause: () -> Unit = {
-        if (!audioAvailable) {
-            Toast.makeText(context, "正在开发中", Toast.LENGTH_SHORT).show()
-        } else {
-            if (!audioExpanded) audioExpanded = true
-            toggleAudio()
-        }
+        if (!audioExpanded) audioExpanded = true
+        toggleAudio()
     }
 
     // 7 秒无操作后收起进度条，同时结束播放（媒体卡片消失），下次从头播放
@@ -791,12 +807,18 @@ private fun ArticleBottomControls(
     var dragPositionMs by remember { mutableLongStateOf(0L) }
     var positionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
+    var playingSource by remember { mutableStateOf(SettingsRepository.AUDIO_SOURCE_MEDIA) }
+    var sentenceIndex by remember { mutableIntStateOf(0) }
+    var sentenceCount by remember { mutableIntStateOf(0) }
 
-    // 展开时轮询播放进度
+    // 展开时轮询播放进度与当前音源/句子
     LaunchedEffect(audioExpanded) {
         while (audioExpanded) {
             if (!dragging) positionMs = PlaybackService.currentPositionMs
             durationMs = PlaybackService.durationMs
+            playingSource = PlaybackService.currentSource
+            sentenceIndex = PlaybackService.sentenceIndex
+            sentenceCount = PlaybackService.sentenceCount
             delay(250L)
         }
     }
@@ -861,35 +883,45 @@ private fun ArticleBottomControls(
                         .padding(start = 6.dp, end = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    MochiSlider(
-                        value = (displayedPositionMs.toFloat() / totalMs).coerceIn(0f, 1f),
-                        onValueChange = { fraction ->
-                            dragging = true
-                            dragPositionMs = (fraction * totalMs).toLong()
-                            interaction++
-                        },
-                        onValueChangeFinished = {
-                            dragging = false
-                            positionMs = dragPositionMs
-                            onSeek(dragPositionMs)
-                            interaction++
-                        },
-                        modifier = Modifier
-                            .width(140.dp)
-                            .height(32.dp),
-                        // 浅色模式下未播放轨道容易和白底混在一起，显式给出可辨识的轨道与拇指颜色
-                        colors = MochiSliderDefaults.colors(
-                            activeTrack = MochiTheme.colorScheme.primary,
-                            inactiveTrack = MochiTheme.colorScheme.onSurface.copy(alpha = 0.22f),
-                            thumb = MochiTheme.colorScheme.surface,
-                        ),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = formatClock(displayedPositionMs),
-                        style = MochiTheme.textStyles.footnote,
-                        color = MochiTheme.colorScheme.onSurfaceVariant,
-                    )
+                    if (playingSource == SettingsRepository.AUDIO_SOURCE_MEDIA) {
+                        MochiSlider(
+                            value = (displayedPositionMs.toFloat() / totalMs).coerceIn(0f, 1f),
+                            onValueChange = { fraction ->
+                                dragging = true
+                                dragPositionMs = (fraction * totalMs).toLong()
+                                interaction++
+                            },
+                            onValueChangeFinished = {
+                                dragging = false
+                                positionMs = dragPositionMs
+                                onSeek(dragPositionMs)
+                                interaction++
+                            },
+                            modifier = Modifier
+                                .width(140.dp)
+                                .height(32.dp),
+                            // 浅色模式下未播放轨道容易和白底混在一起，显式给出可辨识的轨道与拇指颜色
+                            colors = MochiSliderDefaults.colors(
+                                activeTrack = MochiTheme.colorScheme.primary,
+                                inactiveTrack = MochiTheme.colorScheme.onSurface.copy(alpha = 0.22f),
+                                thumb = MochiTheme.colorScheme.surface,
+                            ),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = formatClock(displayedPositionMs),
+                            style = MochiTheme.textStyles.footnote,
+                            color = MochiTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        // TTS 音源无法按时间拖动，展示当前朗读到第几句
+                        Text(
+                            text = "第 ${sentenceIndex + 1}/${sentenceCount.coerceAtLeast(1)} 句",
+                            style = MochiTheme.textStyles.footnote,
+                            color = MochiTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                    }
                 }
             }
         }

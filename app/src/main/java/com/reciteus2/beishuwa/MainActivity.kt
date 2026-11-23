@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,22 +40,49 @@ import androidx.compose.ui.unit.IntOffset
 import kotlinx.collections.immutable.persistentListOf
 import ui.feice.mochi.basic.MochiDialog
 import ui.feice.mochi.basic.MochiDialogAction
+import ui.feice.mochi.basic.MochiToastHost
+import ui.feice.mochi.basic.rememberMochiToastState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
+    private var screenCaptureCallback: Any? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         SettingsRepository.init(this)
         requestNotificationPermission()
+        registerScreenshotDetection()
         enableEdgeToEdge()
         setContent {
             BeishuwaTheme {
                 BeishuwaApp()
             }
         }
+    }
+
+    /** 监听系统截屏（Android 14+），用于截图纠错提示。 */
+    private fun registerScreenshotDetection() {
+        if (Build.VERSION.SDK_INT < 34) return
+        val callback = object : android.app.Activity.ScreenCaptureCallback {
+            override fun onScreenCaptured() {
+                ScreenshotFeedback.onScreenCaptured()
+            }
+        }
+        screenCaptureCallback = callback
+        runCatching { registerScreenCaptureCallback(mainExecutor, callback) }
+            .onFailure { screenCaptureCallback = null }
+    }
+
+    override fun onDestroy() {
+        if (Build.VERSION.SDK_INT >= 34) {
+            (screenCaptureCallback as? android.app.Activity.ScreenCaptureCallback)
+                ?.let { runCatching { unregisterScreenCaptureCallback(it) } }
+        }
+        screenCaptureCallback = null
+        super.onDestroy()
     }
 
     /** Android 13+ 通知权限，用于朗读通知栏与锁屏媒体控制。 */
@@ -202,6 +232,23 @@ private fun BeishuwaApp() {
         onDispose { }
     }
 
+    // 截图纠错：系统截屏回调触发计数，这里弹出可点击的 mochi 提示
+    val toast = rememberMochiToastState()
+    val captureCount by ScreenshotFeedback.captureCount
+    LaunchedEffect(captureCount) {
+        if (captureCount > 0) {
+            toast.show(
+                title = "发现问题？单击此处反馈",
+                subtitle = "点击后跳转至QQ用户群",
+                icon = { tint ->
+                    Icon(Icons.Rounded.BugReport, contentDescription = null, tint = tint)
+                },
+                durationMillis = 5000,
+                onClick = { ScreenshotFeedback.reportProblem(context) },
+            )
+        }
+    }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -244,6 +291,8 @@ private fun BeishuwaApp() {
                 )
             }
         }
+
+        MochiToastHost(toast)
     }
 }
 

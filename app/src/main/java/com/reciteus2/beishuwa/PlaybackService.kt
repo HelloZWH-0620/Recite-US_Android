@@ -13,6 +13,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -22,16 +24,40 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.media.app.NotificationCompat.MediaStyle
 import androidx.media.session.MediaButtonReceiver
+import java.io.File
+import java.security.MessageDigest
+import java.util.Locale
+import java.util.concurrent.Executors
 
 /**
- * 朗读前台服务：负责熄屏播放、单曲循环、通知栏/锁屏媒体控制与进度拖动。
+ * 朗读前台服务：负责熄屏播放、通知栏/锁屏媒体控制。
+ *
+ * 支持三种音源：
+ * - [SettingsRepository.AUDIO_SOURCE_MEDIA]：内置录音，整段循环播放，可拖动进度；
+ * - [SettingsRepository.AUDIO_SOURCE_SYSTEM]：系统 TTS，逐句朗读；
+ * - [SettingsRepository.AUDIO_SOURCE_EDGE]：Edge 在线 TTS，逐句合成后播放。
+ *
+ * TTS 模式下通知/媒体卡片展示当前正在朗读的句子，播放位置用「第 i/n 句」表示。
  */
 class PlaybackService : Service() {
 
     private var player: MediaPlayer? = null
+    private var tts: TextToSpeech? = null
     private var session: MediaSessionCompat? = null
-    private var title: String = ""
-    private var author: String = ""
+
+    private var articleTitle: String = ""
+    private var articleAuthor: String = ""
+    private var source: String = SettingsRepository.AUDIO_SOURCE_MEDIA
+    private var sentences: List<String> = emptyList()
+    private var index: Int = 0
+    private var pausedByUser: Boolean = false
+
+    private var cardTitle: String = ""
+    private var cardSubtitle: String = ""
+
+    /** Edge 合成的任务代次，切换/停止后丢弃旧的合成结果 */
+    private var edgeGeneration: Int = 0
+    private val edgeExecutor = Executors.newSingleThreadExecutor()
 
     private val handler = Handler(Looper.getMainLooper())
     private var tickCount = 0
@@ -54,6 +80,8 @@ class PlaybackService : Service() {
         const val ACTION_STOP = "com.reciteus2.beishuwa.action.STOP"
         const val ACTION_SEEK = "com.reciteus2.beishuwa.action.SEEK"
         const val EXTRA_ASSET = "asset"
+        const val EXTRA_SOURCE = "source"
+        const val EXTRA_SENTENCES = "sentences"
         const val EXTRA_TITLE = "title"
         const val EXTRA_AUTHOR = "author"
         const val EXTRA_POSITION = "position"
@@ -79,10 +107,38 @@ class PlaybackService : Service() {
         var durationMs: Long = 0L
             private set
 
-        fun start(context: Context, assetName: String, title: String, author: String) {
+        /** 当前生效的音源（内置录音缺失时可能从 media 自动降级为 edge） */
+        @Volatile
+        var currentSource: String = SettingsRepository.AUDIO_SOURCE_MEDIA
+            private set
+
+        /** 当前朗读到第几句（从 0 开始），仅 TTS 模式有意义 */
+        @Volatile
+        var sentenceIndex: Int = 0
+            private set
+
+        /** 朗读句子总数，仅 TTS 模式有意义 */
+        @Volatile
+        var sentenceCount: Int = 0
+            private set
+
+        fun start(
+            context: Context,
+            assetName: String?,
+            source: String,
+            sentences: List<String>,
+            title: String,
+            author: String,
+        ) {
+            val clean = sentences.filter { it.isNotBlank() }
+            currentSource = source
+            sentenceIndex = 0
+            sentenceCount = clean.size
             val intent = Intent(context, PlaybackService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_ASSET, assetName)
+                putExtra(EXTRA_SOURCE, source)
+                putStringArrayListExtra(EXTRA_SENTENCES, ArrayList(clean))
                 putExtra(EXTRA_TITLE, title)
                 putExtra(EXTRA_AUTHOR, author)
             }
@@ -113,17 +169,11 @@ class PlaybackService : Service() {
         val mediaSession = MediaSessionCompat(this, "BeishuwaPlayback").apply {
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() {
-                    player?.start()
-                    isPlaying = true
-                    publishState()
-                    postNotification()
+                    resumePlayback()
                 }
 
                 override fun onPause() {
-                    player?.pause()
-                    isPlaying = false
-                    publishState()
-                    postNotification()
+                    pausePlayback()
                 }
 
                 override fun onStop() {
@@ -131,6 +181,7 @@ class PlaybackService : Service() {
                 }
 
                 override fun onSeekTo(pos: Long) {
+                    if (source == SettingsRepository.AUDIO_SOURCE_SYSTEM) return
                     player?.seekTo(pos.toInt())
                     publishState()
                     postNotification()
@@ -162,34 +213,19 @@ class PlaybackService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
-                author = intent.getStringExtra(EXTRA_AUTHOR).orEmpty()
-                currentTitle = title
-                val asset = intent.getStringExtra(EXTRA_ASSET)
-                if (asset != null) {
-                    ensureForeground()
-                    startPlayback(asset)
-                }
+                startFromIntent(intent)
             }
 
             ACTION_TOGGLE -> {
-                val mp = player
-                if (mp == null) {
+                if (!isPlaying && player == null && tts == null && sentences.isEmpty()) {
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                if (mp.isPlaying) {
-                    mp.pause()
-                    isPlaying = false
-                } else {
-                    mp.start()
-                    isPlaying = true
-                }
-                publishState()
-                postNotification()
+                if (isPlaying) pausePlayback() else resumePlayback()
             }
 
             ACTION_SEEK -> {
+                if (source == SettingsRepository.AUDIO_SOURCE_SYSTEM) return START_STICKY
                 player?.seekTo(intent.getLongExtra(EXTRA_POSITION, 0L).toInt())
                 publishState()
                 postNotification()
@@ -203,29 +239,77 @@ class PlaybackService : Service() {
         return START_STICKY
     }
 
-    private fun startPlayback(assetName: String) {
-        releasePlayer()
-        val mp = MediaPlayer()
-        assets.openFd(assetName).use { afd ->
-            mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+    private fun startFromIntent(intent: Intent) {
+        articleTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+        articleAuthor = intent.getStringExtra(EXTRA_AUTHOR).orEmpty()
+        source = intent.getStringExtra(EXTRA_SOURCE) ?: SettingsRepository.AUDIO_SOURCE_MEDIA
+        sentences = intent.getStringArrayListExtra(EXTRA_SENTENCES)
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+        index = 0
+        pausedByUser = false
+        sentenceIndex = 0
+        sentenceCount = sentences.size
+        currentSource = source
+        cardTitle = articleTitle
+        cardSubtitle = articleAuthor
+        currentTitle = articleTitle
+
+        ensureForeground()
+
+        val asset = intent.getStringExtra(EXTRA_ASSET)
+        when (source) {
+            SettingsRepository.AUDIO_SOURCE_SYSTEM -> startSystemPlayback()
+            SettingsRepository.AUDIO_SOURCE_EDGE -> startEdgePlayback()
+            else -> {
+                if (asset != null && assetExists(asset)) {
+                    startMediaPlayback(asset)
+                } else if (sentences.isNotEmpty()) {
+                    // 没有内置录音时自动改用 Edge 在线朗读
+                    source = SettingsRepository.AUDIO_SOURCE_EDGE
+                    currentSource = source
+                    startEdgePlayback()
+                } else {
+                    stopPlayback()
+                }
+            }
         }
-        mp.isLooping = true
-        mp.prepare()
-        mp.start()
+    }
+
+    // ---------------- 内置录音 ----------------
+
+    private fun startMediaPlayback(assetName: String) {
+        releaseTts()
+        edgeGeneration++
+        releasePlayer()
+
+        val mp = MediaPlayer()
+        try {
+            assets.openFd(assetName).use { afd ->
+                mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+            }
+            mp.isLooping = true
+            mp.prepare()
+            mp.start()
+        } catch (e: Exception) {
+            runCatching { mp.release() }
+            stopPlayback()
+            return
+        }
+
         player = mp
         isPlaying = true
         currentPositionMs = 0L
         durationMs = mp.duration.toLong()
+        cardTitle = articleTitle
+        cardSubtitle = articleAuthor
+        currentTitle = articleTitle
+        sentenceIndex = 0
+        sentenceCount = 0
 
         session?.apply {
-            setMetadata(
-                MediaMetadataCompat.Builder()
-                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, author)
-                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, mp.duration.toLong())
-                    .build()
-            )
             isActive = true
+            setMetadata(buildMetadata())
         }
         publishState()
         ensureForeground()
@@ -233,14 +317,202 @@ class PlaybackService : Service() {
         handler.post(ticker)
     }
 
-    private fun publishState() {
-        val mp = player ?: return
-        currentPositionMs = mp.currentPosition.toLong()
-        durationMs = mp.duration.toLong()
-        val state = when {
-            mp.isPlaying -> PlaybackStateCompat.STATE_PLAYING
-            else -> PlaybackStateCompat.STATE_PAUSED
+    // ---------------- 系统 TTS ----------------
+
+    private fun startSystemPlayback() {
+        releasePlayer()
+        releaseTts()
+        edgeGeneration++
+        index = 0
+        isPlaying = false
+        cardSubtitle = "系统朗读 · $articleTitle"
+        setSentencesCard()
+        session?.apply {
+            isActive = true
+            setMetadata(buildMetadata())
         }
+        publishTtsState()
+
+        val engine = TextToSpeech(applicationContext) { status ->
+            if (status != TextToSpeech.SUCCESS) {
+                stopPlayback()
+                return@TextToSpeech
+            }
+            val e = tts ?: return@TextToSpeech
+            runCatching { e.language = Locale.SIMPLIFIED_CHINESE }
+            e.setOnUtteranceProgressListener(utteranceListener)
+            if (!pausedByUser) speakCurrentSentence()
+        }
+        tts = engine
+    }
+
+    private val utteranceListener = object : UtteranceProgressListener() {
+        override fun onStart(utteranceId: String?) {
+            isPlaying = true
+            publishTtsState()
+            postNotification()
+        }
+
+        override fun onDone(utteranceId: String?) {
+            handler.post {
+                if (source != SettingsRepository.AUDIO_SOURCE_SYSTEM || pausedByUser) return@post
+                index = if (index + 1 >= sentences.size) 0 else index + 1
+                speakCurrentSentence()
+            }
+        }
+
+        @Deprecated("Deprecated in Java")
+        override fun onError(utteranceId: String?) {
+            handler.post { stopPlayback() }
+        }
+
+        override fun onError(utteranceId: String?, errorCode: Int) {
+            handler.post { stopPlayback() }
+        }
+    }
+
+    private fun speakCurrentSentence() {
+        val e = tts ?: return
+        val text = sentences.getOrNull(index) ?: return
+        sentenceIndex = index
+        setSentencesCard()
+        cardTitle = text
+        currentTitle = text
+        isPlaying = true
+        e.speak(text, TextToSpeech.QUEUE_FLUSH, null, "sys-$index-${System.nanoTime()}")
+        session?.setMetadata(buildMetadata())
+        publishTtsState()
+        postNotification()
+    }
+
+    // ---------------- Edge 在线 TTS ----------------
+
+    private fun startEdgePlayback() {
+        releasePlayer()
+        releaseTts()
+        index = 0
+        pausedByUser = false
+        edgeGeneration++
+        isPlaying = true
+        cardSubtitle = "Edge 朗读 · $articleTitle"
+        setSentencesCard()
+        session?.apply {
+            isActive = true
+            setMetadata(buildMetadata())
+        }
+        publishTtsState()
+        playEdgeSentence()
+    }
+
+    private fun playEdgeSentence() {
+        val text = sentences.getOrNull(index) ?: return
+        sentenceIndex = index
+        setSentencesCard()
+        cardTitle = text
+        currentTitle = text
+        isPlaying = true
+        session?.setMetadata(buildMetadata())
+        publishTtsState()
+        postNotification()
+
+        val generation = edgeGeneration
+        val cacheFile = edgeCacheFile(text)
+        edgeExecutor.execute {
+            val ok = EdgeTts.synthesize(text, cacheFile)
+            handler.post {
+                if (generation != edgeGeneration || source != SettingsRepository.AUDIO_SOURCE_EDGE) return@post
+                if (!ok) {
+                    stopPlayback()
+                } else {
+                    playEdgeFile(cacheFile)
+                }
+            }
+        }
+    }
+
+    private fun edgeCacheFile(text: String): File {
+        val digest = MessageDigest.getInstance("MD5").digest(text.toByteArray(Charsets.UTF_8))
+        val name = digest.joinToString("") { "%02x".format(it) }
+        val dir = File(cacheDir, "edge_tts")
+        dir.mkdirs()
+        return File(dir, "$name.mp3")
+    }
+
+    private fun playEdgeFile(file: File) {
+        releasePlayer()
+        val mp = MediaPlayer()
+        try {
+            mp.setDataSource(file.absolutePath)
+            mp.prepare()
+        } catch (e: Exception) {
+            runCatching { mp.release() }
+            handler.post { stopPlayback() }
+            return
+        }
+        player = mp
+        durationMs = mp.duration.toLong()
+        currentPositionMs = 0L
+        if (!pausedByUser) mp.start()
+        isPlaying = !pausedByUser
+
+        mp.setOnCompletionListener {
+            handler.post {
+                if (player !== mp) return@post
+                if (source != SettingsRepository.AUDIO_SOURCE_EDGE || pausedByUser) return@post
+                index = if (index + 1 >= sentences.size) 0 else index + 1
+                playEdgeSentence()
+            }
+        }
+
+        publishState()
+        postNotification()
+        handler.removeCallbacks(ticker)
+        handler.post(ticker)
+    }
+
+    // ---------------- 播放控制 ----------------
+
+    private fun pausePlayback() {
+        pausedByUser = true
+        when (source) {
+            SettingsRepository.AUDIO_SOURCE_SYSTEM -> runCatching { tts?.stop() }
+            else -> runCatching { player?.pause() }
+        }
+        isPlaying = false
+        if (source == SettingsRepository.AUDIO_SOURCE_SYSTEM) publishTtsState() else publishState()
+        postNotification()
+    }
+
+    private fun resumePlayback() {
+        pausedByUser = false
+        when (source) {
+            SettingsRepository.AUDIO_SOURCE_SYSTEM -> speakCurrentSentence()
+            else -> {
+                runCatching { player?.start() }
+                isPlaying = player != null
+                publishState()
+                postNotification()
+            }
+        }
+    }
+
+    private fun setSentencesCard() {
+        cardSubtitle = when (source) {
+            SettingsRepository.AUDIO_SOURCE_SYSTEM -> "系统朗读 · $articleTitle"
+            SettingsRepository.AUDIO_SOURCE_EDGE -> "Edge 朗读 · $articleTitle"
+            else -> articleAuthor
+        }
+    }
+
+    private fun publishState() {
+        val mp = player
+        if (mp != null) {
+            currentPositionMs = mp.currentPosition.toLong()
+            durationMs = mp.duration.toLong()
+        }
+        val playing = if (mp != null) mp.isPlaying else isPlaying
+        isPlaying = playing
+        val state = if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
         val actions = PlaybackStateCompat.ACTION_PLAY
             .or(PlaybackStateCompat.ACTION_PAUSE)
             .or(PlaybackStateCompat.ACTION_PLAY_PAUSE)
@@ -249,10 +521,35 @@ class PlaybackService : Service() {
         session?.setPlaybackState(
             PlaybackStateCompat.Builder()
                 .setActions(actions)
-                .setState(state, mp.currentPosition.toLong(), if (state == PlaybackStateCompat.STATE_PLAYING) 1f else 0f)
+                .setState(state, mp?.currentPosition?.toLong() ?: 0L, if (playing) 1f else 0f)
                 .build()
         )
     }
+
+    private fun publishTtsState() {
+        val actions = PlaybackStateCompat.ACTION_PLAY
+            .or(PlaybackStateCompat.ACTION_PAUSE)
+            .or(PlaybackStateCompat.ACTION_PLAY_PAUSE)
+            .or(PlaybackStateCompat.ACTION_STOP)
+        session?.setPlaybackState(
+            PlaybackStateCompat.Builder()
+                .setActions(actions)
+                .setState(
+                    if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
+                    0L,
+                    if (isPlaying) 1f else 0f,
+                )
+                .build()
+        )
+    }
+
+    private fun buildMetadata(): MediaMetadataCompat =
+        MediaMetadataCompat.Builder()
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, cardTitle.ifBlank { articleTitle })
+            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, cardSubtitle)
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, articleTitle)
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs)
+            .build()
 
     private fun ensureForeground() {
         val notification = buildNotification()
@@ -270,7 +567,7 @@ class PlaybackService : Service() {
 
     private fun buildNotification(): android.app.Notification {
         val mediaSession = session
-        val playing = player?.isPlaying == true
+        val playing = isPlaying
         val contentIntent = PendingIntent.getActivity(
             this,
             0,
@@ -298,8 +595,8 @@ class PlaybackService : Service() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_play)
-            .setContentTitle(title)
-            .setContentText(author)
+            .setContentTitle(cardTitle.ifBlank { articleTitle }.take(120))
+            .setContentText(cardSubtitle)
             .setContentIntent(contentIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
@@ -313,12 +610,15 @@ class PlaybackService : Service() {
 
         session?.let { builder.setStyle(MediaStyle().setMediaSession(it.sessionToken).setShowActionsInCompactView(0, 1)) }
 
-        player?.let { mp ->
+        val mp = player
+        if (mp != null && source == SettingsRepository.AUDIO_SOURCE_MEDIA) {
             val duration = mp.duration.coerceAtLeast(0)
             val position = mp.currentPosition.coerceIn(0, duration)
             if (duration > 0) {
                 builder.setProgress(duration, position, false)
             }
+        } else if (source != SettingsRepository.AUDIO_SOURCE_MEDIA && sentences.isNotEmpty()) {
+            builder.setSubText("第 ${sentenceIndex + 1}/${sentences.size} 句")
         }
         return builder.build()
     }
@@ -344,8 +644,12 @@ class PlaybackService : Service() {
 
     private fun stopPlayback() {
         handler.removeCallbacks(ticker)
+        edgeGeneration++
         releasePlayer()
+        releaseTts()
         isPlaying = false
+        pausedByUser = false
+        sentenceIndex = 0
         session?.isActive = false
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID)
@@ -355,13 +659,24 @@ class PlaybackService : Service() {
     private fun releasePlayer() {
         player?.let {
             runCatching { if (it.isPlaying) it.stop() }
+            it.setOnCompletionListener(null)
             it.release()
         }
         player = null
-        isPlaying = false
         currentPositionMs = 0L
         durationMs = 0L
     }
+
+    private fun releaseTts() {
+        tts?.let {
+            runCatching { it.stop() }
+            runCatching { it.shutdown() }
+        }
+        tts = null
+    }
+
+    private fun assetExists(assetName: String): Boolean =
+        runCatching { assets.openFd(assetName).use { } }.isSuccess
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -373,7 +688,9 @@ class PlaybackService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(ticker)
+        edgeGeneration++
         releasePlayer()
+        releaseTts()
         session?.release()
         session = null
         isPlaying = false

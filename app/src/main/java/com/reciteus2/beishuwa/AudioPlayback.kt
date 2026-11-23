@@ -4,7 +4,7 @@ import android.content.Context
 
 /**
  * 朗读控制入口：实际播放由 [PlaybackService] 前台服务负责，
- * 支持熄屏播放、单曲循环、通知栏/锁屏播放控制与进度拖动。
+ * 支持熄屏播放、通知栏/锁屏播放控制；TTS 音源逐句朗读并同步媒体卡片句子。
  */
 class AudioPlayback(
     private val context: Context,
@@ -13,8 +13,14 @@ class AudioPlayback(
     val isPlaying: Boolean
         get() = PlaybackService.isPlaying
 
-    fun start(assetName: String, title: String, author: String) {
-        PlaybackService.start(context, assetName, title, author)
+    fun start(
+        assetName: String?,
+        source: String,
+        sentences: List<String>,
+        title: String,
+        author: String,
+    ) {
+        PlaybackService.start(context, assetName, source, sentences, title, author)
     }
 
     fun toggle() {

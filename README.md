@@ -5,7 +5,7 @@
 # <img src="app/src/main/icon/ReciteUS2.ico" height="28" width="28"/> 背书哇（Android）
 
 [![Stars](https://img.shields.io/github/stars/HelloZWH-0620/Recite-US_Android?label=Stars)](https://github.com/HelloZWH-0620/Recite-US_Android)
-[![版本](https://img.shields.io/badge/版本-v1.6.6111-orange?style=flat-square)](https://github.com/HelloZWH-0620/Recite-US_Android/releases)
+[![版本](https://img.shields.io/badge/版本-1.6.3123-orange?style=flat-square)](https://github.com/HelloZWH-0620/Recite-US_Android/releases)
 ![Android 版本](https://img.shields.io/badge/Android-8.0%2B-3ddc84?style=flat-square&logo=android)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7f52ff?style=flat-square&logo=kotlin)
 ![设计规范](https://img.shields.io/badge/设计规范-Mochi_%2B_Material_3-0052cc?style=flat-square)
@@ -36,9 +36,12 @@
 
 ### 朗读
 
-- [ ] 正文一键朗读（实验性功能）
-- [x] 前台服务播放，支持熄屏播放、单曲循环与进度条
-- [x] Android 12+ 原生媒体通知
+- [x] 正文一键朗读，支持系统 TTS / Edge 在线朗读 / 内置录音三种音源
+- [x] 在「我的」中随时切换音源，默认使用系统 TTS
+- [x] TTS 模式逐句朗读，媒体卡片同步展示当前句子与句进度
+- [x] 无内置录音的篇目自动改用 Edge 在线朗读
+- [x] 前台服务播放，支持熄屏播放与单曲循环
+- [x] Android 12+ 原生媒体通知，内置录音支持进度拖动
 
 ### 作者资料
 
@@ -56,6 +59,8 @@
 
 - [x] 预测性返回手势跟手动画（Android 16+）
 - [x] 手机主页锁定竖屏、文章页支持横屏，平板自适应并避让安全区
+- [x] 「我的」页检查更新，直达 GitHub Releases
+- [x] 截图纠错：截图后弹出提示，可一键复制 QQ 群号并跳转反馈
 
 ## 开始使用
 
@@ -83,7 +88,7 @@
 
 在本地编译应用：
 
-1. 使用 Android Studio 打开仓库根目录下的 `Beishuwa` 工程；
+1. 使用 Android Studio 打开仓库根目录工程；
 2. 等待 Gradle Sync 完成；
 3. 运行 `app` 的 `assembleDebug` 任务即可生成 APK。
 

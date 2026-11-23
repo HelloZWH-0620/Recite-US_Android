@@ -5,6 +5,17 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- 截图纠错：监听系统截屏 -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
+
+    <!-- 截图纠错跳转 QQ 用户群需要查询 QQ 是否安装 -->
+    <queries>
+        <package android:name="com.tencent.mobileqq" />
+        <!-- Android 11+ 需要显式声明才能发现系统 TTS 引擎 -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="true"

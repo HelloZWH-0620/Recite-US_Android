@@ -16,6 +16,15 @@ object SettingsRepository {
     private const val KEY_AI_USE_AAAS = "ai_use_aaas"
     private const val KEY_TABLET_ROTATION = "tablet_rotation"
     private const val KEY_AUDIO_ENABLED = "audio_enabled"
+    private const val KEY_AUDIO_SOURCE = "audio_source"
+    private const val KEY_SCREENSHOT_FEEDBACK = "screenshot_feedback"
+
+    /** 朗读音源：系统 TTS */
+    const val AUDIO_SOURCE_SYSTEM = "system"
+    /** 朗读音源：Edge 在线 TTS */
+    const val AUDIO_SOURCE_EDGE = "edge"
+    /** 朗读音源：内置录音 */
+    const val AUDIO_SOURCE_MEDIA = "media"
 
     /** 可选的 AI 模型标识 */
     const val AI_MODEL_FLASH = "deepseek-v4.1-flash-1017"
@@ -30,6 +39,12 @@ object SettingsRepository {
 
     /** 是否开启正文音频朗读（默认开启，已从实验性功能移出） */
     val audioEnabled = mutableStateOf(true)
+
+    /** 朗读音源，默认系统 TTS */
+    val audioSource = mutableStateOf(AUDIO_SOURCE_SYSTEM)
+
+    /** 截图后是否提示反馈问题（默认开启） */
+    val screenshotFeedbackEnabled = mutableStateOf(true)
 
     /** 是否使用 wordtype/Regular.ttf 自定义字体（默认开启） */
     val useCustomFont = mutableStateOf(true)
@@ -62,6 +77,8 @@ object SettingsRepository {
         val prefs = context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
         experimental.value = prefs.getBoolean(KEY_EXPERIMENTAL, false)
         audioEnabled.value = prefs.getBoolean(KEY_AUDIO_ENABLED, true)
+        audioSource.value = prefs.getString(KEY_AUDIO_SOURCE, AUDIO_SOURCE_SYSTEM) ?: AUDIO_SOURCE_SYSTEM
+        screenshotFeedbackEnabled.value = prefs.getBoolean(KEY_SCREENSHOT_FEEDBACK, true)
         useCustomFont.value = prefs.getBoolean(KEY_CUSTOM_FONT, true)
         fontScale.floatValue = prefs.getFloat(KEY_FONT_SCALE, 1f)
             .coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)
@@ -81,6 +98,16 @@ object SettingsRepository {
     fun setAudioEnabled(context: Context, value: Boolean) {
         audioEnabled.value = value
         prefs(context).edit().putBoolean(KEY_AUDIO_ENABLED, value).apply()
+    }
+
+    fun setAudioSource(context: Context, value: String) {
+        audioSource.value = value
+        prefs(context).edit().putString(KEY_AUDIO_SOURCE, value).apply()
+    }
+
+    fun setScreenshotFeedback(context: Context, value: Boolean) {
+        screenshotFeedbackEnabled.value = value
+        prefs(context).edit().putBoolean(KEY_SCREENSHOT_FEEDBACK, value).apply()
     }
 
     fun setCustomFont(context: Context, value: Boolean) {

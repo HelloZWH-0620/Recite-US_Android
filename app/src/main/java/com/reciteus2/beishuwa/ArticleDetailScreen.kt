@@ -105,13 +105,6 @@ import ui.feice.mochi.basic.MochiSliderDefaults
 import ui.feice.mochi.basic.MochiToolbarScaffold
 import ui.feice.mochi.theme.MochiTheme
 
-private fun audioAssetExists(context: Context, articleId: String): Boolean =
-    try {
-        context.assets.list("audio")?.contains("$articleId.mp3") == true
-    } catch (e: Exception) {
-        false
-    }
-
 /** 把正文切成适合逐句朗读的短句：按句号、问号、叹号、分号与换行断开 */
 private fun splitSpeechSentences(text: String): List<String> {
     val result = mutableListOf<String>()

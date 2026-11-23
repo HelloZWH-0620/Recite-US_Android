@@ -3,6 +3,8 @@ package com.reciteus2.beishuwa
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
@@ -88,7 +90,9 @@ import ui.feice.mochi.basic.rememberMochiSheetState
 import ui.feice.mochi.theme.LocalContentColor
 import ui.feice.mochi.theme.MochiTheme
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ProfileScreen() {
@@ -101,6 +105,28 @@ fun ProfileScreen() {
     val audioEnabled by remember { SettingsRepository.audioEnabled }
     val audioSource by remember { SettingsRepository.audioSource }
     var sourceMenuOpen by remember { mutableStateOf(false) }
+    var importingAudio by remember { mutableStateOf(false) }
+    var importedAudioCount by remember { mutableStateOf(AudioLibrary.importedCount(context)) }
+    val zipPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                importingAudio = true
+                val result = withContext(Dispatchers.IO) { AudioLibrary.importZip(context, uri) }
+                importingAudio = false
+                importedAudioCount = AudioLibrary.importedCount(context)
+                val message = when {
+                    result.error != null -> "导入失败：${result.error}"
+                    result.imported > 0 && result.skipped > 0 ->
+                        "已导入 ${result.imported} 篇，${result.skipped} 个文件未匹配"
+                    result.imported > 0 -> "已导入 ${result.imported} 篇录音"
+                    else -> "未找到可匹配的录音文件"
+                }
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     val screenshotFeedback by remember { SettingsRepository.screenshotFeedbackEnabled }
     val tabletRotation by remember { SettingsRepository.tabletRotation }
     val useAaasSpec by remember { SettingsRepository.useAaasSpec }
@@ -191,7 +217,7 @@ fun ProfileScreen() {
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = "背书哇 1.6.4",
+                            text = "背书哇 1.6.5",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -286,7 +312,7 @@ fun ProfileScreen() {
                 ) {
                     AboutRow("软件名称", "背书哇")
                     AboutDivider()
-                    AboutRow("版本号", "1.6.4 · 2026-11-23")
+                    AboutRow("版本号", "1.6.5 · 2026-11-23")
                     AboutDivider()
                     AboutRow("作者", "@喔糖圆鼠")
                     AboutDivider()
@@ -591,6 +617,53 @@ fun ProfileScreen() {
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !importingAudio) {
+                                zipPicker.launch(
+                                    arrayOf(
+                                        "application/zip",
+                                        "application/x-zip-compressed",
+                                        "application/octet-stream",
+                                    )
+                                )
+                            }
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "导入音频压缩包",
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = if (importingAudio) {
+                                    "正在解析压缩包…"
+                                } else {
+                                    "选择 zip 自动解析；已导入 $importedAudioCount 篇"
+                                },
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (importingAudio) {
+                            MochiActivityIndicator(
+                                size = 18.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1106,7 +1179,7 @@ private fun audioSourceLabel(source: String): String = when (source) {
 
 private fun audioSourceHint(source: String): String = when (source) {
     SettingsRepository.AUDIO_SOURCE_EDGE -> "使用微软 Edge 在线合成，音色云健（zh-CN-YunjianNeural），需要联网。"
-    SettingsRepository.AUDIO_SOURCE_MEDIA -> "播放内置真人录音；篇目暂无录音时自动改用 Edge 在线朗读。"
+    SettingsRepository.AUDIO_SOURCE_MEDIA -> "播放内置或导入的真人录音；篇目暂无录音时自动改用 Edge 在线朗读。"
     else -> "使用设备内置 TTS 引擎逐句朗读，无需联网；媒体卡片会显示当前句子。"
 }
 

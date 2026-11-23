@@ -21,8 +21,8 @@ android {
         applicationId = "com.reciteus2.beishuwa"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1006004
-        versionName = "1.6.4"
+        versionCode = 1006005
+        versionName = "1.6.5"
     }
 
     buildFeatures {

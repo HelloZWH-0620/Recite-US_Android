@@ -176,7 +176,7 @@ fun ArticleDetailScreen(
     // 是否已有播放器实例；暂停不销毁，只有自动收起/停止才重置
     var audioStarted by remember { mutableStateOf(false) }
     val audioPlayer = remember { AudioPlayback(context) { audioPlaying = false } }
-    val audioAvailable = remember(article.id) { audioAssetExists(context, article.id) }
+    val audioAvailable = remember(article.id) { AudioLibrary.hasAudio(context, article.id) }
     val speechSentences = remember(article) { splitSpeechSentences(article.text) }
     val notifPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -210,8 +210,10 @@ fun ArticleDetailScreen(
             }
             // 音频缺失/损坏时 start() 可能抛异常，避免点击直接崩溃
             runCatching {
+                val imported = AudioLibrary.importedFile(context, article.id)
                 audioPlayer.start(
-                    assetName = if (audioAvailable) "audio/${article.id}.mp3" else null,
+                    assetName = if (imported == null && audioAvailable) "audio/${article.id}.mp3" else null,
+                    filePath = imported?.absolutePath,
                     source = audioSource,
                     sentences = speechSentences,
                     title = article.title,

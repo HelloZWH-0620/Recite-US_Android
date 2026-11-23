@@ -80,6 +80,7 @@ class PlaybackService : Service() {
         const val ACTION_STOP = "com.reciteus2.beishuwa.action.STOP"
         const val ACTION_SEEK = "com.reciteus2.beishuwa.action.SEEK"
         const val EXTRA_ASSET = "asset"
+        const val EXTRA_FILE = "file"
         const val EXTRA_SOURCE = "source"
         const val EXTRA_SENTENCES = "sentences"
         const val EXTRA_TITLE = "title"
@@ -125,6 +126,7 @@ class PlaybackService : Service() {
         fun start(
             context: Context,
             assetName: String?,
+            filePath: String?,
             source: String,
             sentences: List<String>,
             title: String,
@@ -137,6 +139,7 @@ class PlaybackService : Service() {
             val intent = Intent(context, PlaybackService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_ASSET, assetName)
+                putExtra(EXTRA_FILE, filePath)
                 putExtra(EXTRA_SOURCE, source)
                 putStringArrayListExtra(EXTRA_SENTENCES, ArrayList(clean))
                 putExtra(EXTRA_TITLE, title)
@@ -258,12 +261,15 @@ class PlaybackService : Service() {
         ensureForeground()
 
         val asset = intent.getStringExtra(EXTRA_ASSET)
+        val filePath = intent.getStringExtra(EXTRA_FILE)
         when (source) {
             SettingsRepository.AUDIO_SOURCE_SYSTEM -> startSystemPlayback()
             SettingsRepository.AUDIO_SOURCE_EDGE -> startEdgePlayback()
             else -> {
-                if (asset != null && assetExists(asset)) {
-                    startMediaPlayback(asset)
+                if (!filePath.isNullOrBlank() && File(filePath).isFile) {
+                    startMediaPlayback(null, filePath)
+                } else if (asset != null && assetExists(asset)) {
+                    startMediaPlayback(asset, null)
                 } else if (sentences.isNotEmpty()) {
                     // 没有内置录音时自动改用 Edge 在线朗读
                     source = SettingsRepository.AUDIO_SOURCE_EDGE
@@ -278,15 +284,19 @@ class PlaybackService : Service() {
 
     // ---------------- 内置录音 ----------------
 
-    private fun startMediaPlayback(assetName: String) {
+    private fun startMediaPlayback(assetName: String?, filePath: String?) {
         releaseTts()
         edgeGeneration++
         releasePlayer()
 
         val mp = MediaPlayer()
         try {
-            assets.openFd(assetName).use { afd ->
-                mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+            if (filePath != null) {
+                mp.setDataSource(filePath)
+            } else {
+                assets.openFd(assetName!!).use { afd ->
+                    mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                }
             }
             mp.isLooping = true
             mp.prepare()

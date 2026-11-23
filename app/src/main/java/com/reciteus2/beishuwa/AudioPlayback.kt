@@ -15,12 +15,13 @@ class AudioPlayback(
 
     fun start(
         assetName: String?,
+        filePath: String?,
         source: String,
         sentences: List<String>,
         title: String,
         author: String,
     ) {
-        PlaybackService.start(context, assetName, source, sentences, title, author)
+        PlaybackService.start(context, assetName, filePath, source, sentences, title, author)
     }
 
     fun toggle() {

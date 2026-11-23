@@ -191,7 +191,7 @@ fun ProfileScreen() {
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = "背书哇 1.6.3123",
+                            text = "背书哇 1.6.4",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -286,7 +286,7 @@ fun ProfileScreen() {
                 ) {
                     AboutRow("软件名称", "背书哇")
                     AboutDivider()
-                    AboutRow("版本号", "1.6.3123 · 2026-11-23")
+                    AboutRow("版本号", "1.6.4 · 2026-11-23")
                     AboutDivider()
                     AboutRow("作者", "@喔糖圆鼠")
                     AboutDivider()

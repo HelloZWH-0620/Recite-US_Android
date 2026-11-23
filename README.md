@@ -5,7 +5,7 @@
 # <img src="app/src/main/icon/ReciteUS2.ico" height="28" width="28"/> 背书哇（Android）
 
 [![Stars](https://img.shields.io/github/stars/HelloZWH-0620/Recite-US_Android?label=Stars)](https://github.com/HelloZWH-0620/Recite-US_Android)
-[![版本](https://img.shields.io/badge/版本-1.6.3123-orange?style=flat-square)](https://github.com/HelloZWH-0620/Recite-US_Android/releases)
+[![版本](https://img.shields.io/badge/版本-1.6.4-orange?style=flat-square)](https://github.com/HelloZWH-0620/Recite-US_Android/releases)
 ![Android 版本](https://img.shields.io/badge/Android-8.0%2B-3ddc84?style=flat-square&logo=android)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7f52ff?style=flat-square&logo=kotlin)
 ![设计规范](https://img.shields.io/badge/设计规范-Mochi_%2B_Material_3-0052cc?style=flat-square)
